@@ -27,6 +27,11 @@ abstract class AbstractInfo extends \Magento\Payment\Block\Info
     protected $transactionRepository;
 
     /**
+     * @var array
+     */
+    protected $transactionStatus;
+
+    /**
      * Constructor
      *
      * @param Template\Context $context
@@ -35,12 +40,14 @@ abstract class AbstractInfo extends \Magento\Payment\Block\Info
     public function __construct(
         \PayEx\Payments\Helper\Data $payexHelper,
         \Magento\Sales\Api\TransactionRepositoryInterface $transactionRepository,
+        \PayEx\Payments\Model\Config\Source\TransactionStatus $transactionStatus,
         Template\Context $context,
         array $data = []
     )
     {
         parent::__construct($context, $data);
         $this->payexHelper = $payexHelper;
+        $this->transactionStatus = $transactionStatus->toOptionArray();
         $this->transactionRepository = $transactionRepository;
     }
 
@@ -81,6 +88,12 @@ abstract class AbstractInfo extends \Magento\Payment\Block\Info
                     foreach ($this->transactionFields as $description => $list) {
                         foreach ($list as $key => $value) {
                             if (isset($transaction_data[$value])) {
+                                if ($value == 'transactionStatus') {
+                                    if (isset($this->transactionStatus[$transaction_data[$value]]) && isset($this->transactionStatus[$transaction_data[$value]]['value'])) {
+                                        $transaction_data[$value] = $this->transactionStatus[$transaction_data[$value]]['value'];
+                                    }
+                                }
+
                                 $result[$description] = $transaction_data[$value];
                             }
                         }
