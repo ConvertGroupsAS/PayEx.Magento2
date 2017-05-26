@@ -88,13 +88,14 @@ abstract class AbstractInfo extends \Magento\Payment\Block\Info
                     foreach ($this->transactionFields as $description => $list) {
                         foreach ($list as $key => $value) {
                             if (isset($transaction_data[$value])) {
+                                $transactionValue = $transaction_data[$value];
                                 if ($value == 'transactionStatus') {
-                                    if (isset($this->transactionStatus[$transaction_data[$value]]) && isset($this->transactionStatus[$transaction_data[$value]]['value'])) {
-                                        $transaction_data[$value] = $this->transactionStatus[$transaction_data[$value]]['value'];
+                                    if (isset($this->transactionStatus[$transactionValue]) && isset($this->transactionStatus[$$transactionValue]['value'])) {
+                                        $transactionValue = $this->transactionStatus[$transactionValue]['value'];
                                     }
                                 }
 
-                                $result[$description] = $transaction_data[$value];
+                                $result[$description] = $transactionValue;
                             }
                         }
                     }
