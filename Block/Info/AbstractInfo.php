@@ -90,8 +90,8 @@ abstract class AbstractInfo extends \Magento\Payment\Block\Info
                             if (isset($transaction_data[$value])) {
                                 $transactionValue = $transaction_data[$value];
                                 if ($value == 'transactionStatus') {
-                                    if (isset($this->transactionStatus[$transactionValue]) && isset($this->transactionStatus[$$transactionValue]['value'])) {
-                                        $transactionValue = $this->transactionStatus[$transactionValue]['value'];
+                                    if (isset($this->transactionStatus[$transactionValue]) && isset($this->transactionStatus[$transactionValue]['label'])) {
+                                        $transactionValue = $this->transactionStatus[$transactionValue]['label'];
                                     }
                                 }
 
