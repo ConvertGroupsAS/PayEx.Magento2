@@ -174,6 +174,23 @@ class Cc extends \PayEx\Payments\Model\Method\AbstractMethod
         $amount = $order->getGrandTotal();
 
         // Call PxOrder.Initialize8
+
+        $customerName = __('Guest');
+
+        if ($order->getCustomerFirstname()) {
+            $customerName = $order->getCustomerFirstname() . ' ' . $order->getCustomerLastname();
+        } else {
+            if ($addresses = $order->getAddresses()) {
+                $customerName = $addresses[0]->getFirstname() . ' ' . $addresses[0]->getLastname();
+                /** @var \Magento\Sales\Api\Data\OrderAddressInterface $address */
+                foreach ($addresses as $address) {
+                    if ($address->getAddressType() === \Magento\Sales\Model\Order\Address::TYPE_BILLING) {
+                        $customerName = $address->getFirstname() . ' ' . $address->getLastname();
+                    }
+                }
+            }
+        }
+
         $params = [
             'accountNumber' => '',
             'purchaseOperation' => $operation,
@@ -183,7 +200,7 @@ class Cc extends \PayEx\Payments\Model\Method\AbstractMethod
             'vat' => 0,
             'orderID' => $order_id,
             'productNumber' => ($order->getTotalItemCount() ? : $order->getTotalQtyOrdered()) . ' ' . __('items'),
-            'description' => $order->getCustomerName(),
+            'description' => $customerName,
             'clientIPAddress' => $this->payexHelper->getRemoteAddr(),
             'clientIdentifier' => 'USERAGENT=' . $this->request->getServer('HTTP_USER_AGENT'),
             'additionalValues' => $additional,
