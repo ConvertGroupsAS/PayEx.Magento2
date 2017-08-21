@@ -99,7 +99,7 @@ class MobilePay extends \PayEx\Payments\Model\Method\Cc
             'currency' => $currency_code,
             'vat' => 0,
             'orderID' => $order_id,
-            'productNumber' => $order_id,
+            'productNumber' => ($order->getTotalItemCount() ? : $order->getTotalQtyOrdered()) . ' ' . __('items'),
             'description' => $this->payexHelper->getStore()->getName(),
             'clientIPAddress' => $this->payexHelper->getRemoteAddr(),
             'clientIdentifier' => 'USERAGENT=' . $this->request->getServer('HTTP_USER_AGENT'),
