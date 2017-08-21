@@ -93,7 +93,7 @@ class PartPayment extends \PayEx\Payments\Model\Method\Financing
             'vat' => 0,
             'orderID' => $order_id,
             'productNumber' => $order_id,
-            'description' => $this->payexHelper->getStore()->getName(),
+            'description' => $this->getCustomerName(),
             'clientIPAddress' => $this->payexHelper->getRemoteAddr(),
             'clientIdentifier' => '',
             'additionalValues' => '',
