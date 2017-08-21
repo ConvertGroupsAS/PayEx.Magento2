@@ -1,4 +1,4 @@
-﻿<?php
+<?php
 
 namespace PayEx\Payments\Model\Config\Source;
 
