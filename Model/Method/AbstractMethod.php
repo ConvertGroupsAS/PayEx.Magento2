@@ -356,4 +356,36 @@ abstract class AbstractMethod extends \Magento\Payment\Model\Method\AbstractMeth
         // Show Error
         throw new LocalizedException(__($this->payexHelper->getVerboseErrorMessage($result)));
     }
+
+    /**
+     * Get order customer name
+     * @return string
+     * @api
+     * @SuppressWarnings(PHPMD.UnusedFormalParameter)
+     */
+    protected function getCustomerName()
+    {
+        /** @var \Magento\Quote\Model\Quote\Payment $info */
+        $info = $this->getInfoInstance();
+
+        /** @var \Magento\Sales\Model\Order $order */
+        $order = $info->getOrder();
+
+        $customerName = __('Guest');
+
+        if ($order->getCustomerFirstname()) {
+            $customerName = $order->getCustomerFirstname() . ' ' . $order->getCustomerLastname();
+        } else {
+            if ($addresses = $order->getAddresses()) {
+                $customerName = $addresses[0]->getFirstname() . ' ' . $addresses[0]->getLastname();
+                /** @var \Magento\Sales\Api\Data\OrderAddressInterface $address */
+                foreach ($addresses as $address) {
+                    if ($address->getAddressType() === \Magento\Sales\Model\Order\Address::TYPE_BILLING) {
+                        $customerName = $address->getFirstname() . ' ' . $address->getLastname();
+                    }
+                }
+            }
+        }
+        return $customerName;
+    }
 }
