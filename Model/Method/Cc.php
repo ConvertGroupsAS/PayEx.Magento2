@@ -183,7 +183,7 @@ class Cc extends \PayEx\Payments\Model\Method\AbstractMethod
             'vat' => 0,
             'orderID' => $order_id,
             'productNumber' => ($order->getTotalItemCount() ? : $order->getTotalQtyOrdered()) . ' ' . __('items'),
-            'description' => $order->getCustomerName(),
+            'description' => $this->payexHelper->getStore()->getName(),
             'clientIPAddress' => $this->payexHelper->getRemoteAddr(),
             'clientIdentifier' => 'USERAGENT=' . $this->request->getServer('HTTP_USER_AGENT'),
             'additionalValues' => $additional,
