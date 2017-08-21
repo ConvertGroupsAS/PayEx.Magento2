@@ -98,7 +98,7 @@ class Swish extends \PayEx\Payments\Model\Method\Cc
             'currency' => $currency_code,
             'vat' => 0,
             'orderID' => $order_id,
-            'productNumber' => $order_id,
+            'productNumber' => ($order->getTotalItemCount() ? : $order->getTotalQtyOrdered()) . ' ' . __('items'),
             'description' => $this->getCustomerName(),
             'clientIPAddress' => $this->payexHelper->getRemoteAddr(),
             'clientIdentifier' => 'USERAGENT=' . $this->request->getServer('HTTP_USER_AGENT'),
@@ -142,9 +142,9 @@ class Swish extends \PayEx\Payments\Model\Method\Cc
                     'itemDescription4' => '',
                     'itemDescription5' => '',
                     'quantity' => $item['qty'],
-                    'amount' => (int)(100 * $item['price_with_tax']), //must include tax
-                    'vatPrice' => (int)(100 * $item['tax_price']),
-                    'vatPercent' => (int)(100 * $item['tax_percent'])
+                    'amount' => bcmul(100, $item['price_with_tax']), //must include tax
+                    'vatPrice' => bcmul(100, $item['tax_price']),
+                    'vatPercent' => bcmul(100, $item['tax_percent'])
                 ];
 
                 $result = $this->payexHelper->getPx()->AddSingleOrderLine2($params);

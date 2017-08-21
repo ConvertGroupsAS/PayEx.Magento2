@@ -92,7 +92,7 @@ class PartPayment extends \PayEx\Payments\Model\Method\Financing
             'currency' => $currency_code,
             'vat' => 0,
             'orderID' => $order_id,
-            'productNumber' => $order_id,
+            'productNumber' => ($order->getTotalItemCount() ? : $order->getTotalQtyOrdered()) . ' ' . __('items'),
             'description' => $this->getCustomerName(),
             'clientIPAddress' => $this->payexHelper->getRemoteAddr(),
             'clientIdentifier' => '',

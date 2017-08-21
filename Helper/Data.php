@@ -349,7 +349,16 @@ class Data extends AbstractHelper
         }
 
         // add Discount
-        if (abs($order->getDiscountAmount()) > 0) {
+        $hasDiscount = false;
+        $data = $order->getData();
+        foreach ($data as $field => $value) {
+            if ((strpos($field, 'discount_amount') !== false) && abs($value) > 0) {
+                $hasDiscount = true;
+                break;
+            }
+        }
+
+        if ($hasDiscount) {
             $discountData = $this->getOrderDiscountData($order);
             $discountInclTax = $discountData->getDiscountInclTax();
             $discountExclTax = $discountData->getDiscountExclTax();
@@ -543,9 +552,8 @@ class Data extends AbstractHelper
     {
         $discountIncl = 0;
         $discountExcl = 0;
-
         // find discount on the items
-        foreach ($order->getItemsCollection() as $item) {
+        foreach ($order->getItems() as $item) {
             /** @var \Magento\Sales\Model\Order\Item $item */
             if (!$this->taxHelper->priceIncludesTax()) {
                 $discountExcl += $item->getDiscountAmount();
