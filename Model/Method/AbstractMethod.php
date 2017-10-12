@@ -263,7 +263,20 @@ abstract class AbstractMethod extends \Magento\Payment\Model\Method\AbstractMeth
             'accountNumber' => '',
             'transactionNumber' => $details['transactionNumber']
         ];
-        $result = $this->payexHelper->getPx()->Cancel2($params);
+        try {
+            $result = $this->payexHelper->getPx()->Cancel2($params);
+        } catch (\Exception $e) {
+            $this->logger->debug(
+                [
+                    'msg' => 'PayEx cancel exception',
+                    'error' => $e->getMessage()
+                ],
+                null,
+                true
+            );
+
+            throw new \Exception('PayEx: Can not cancel order');
+        }
         if ($result['code'] === 'OK' && $result['errorCode'] === 'OK' && $result['description'] === 'OK') {
             // Add Cancel Transaction
             $payment->setStatus(self::STATUS_DECLINED)
@@ -273,6 +286,15 @@ abstract class AbstractMethod extends \Magento\Payment\Model\Method\AbstractMeth
             // Add Transaction fields
             $payment->setAdditionalInformation(\Magento\Sales\Model\Order\Payment\Transaction::RAW_DETAILS, $result);
             return $this;
+        } else {
+            $this->logger->debug(
+                [
+                    'msg' => 'PayEx cancel error',
+                    'result' => $result
+                ],
+                null,
+                true
+            );
         }
 
         // Show Error
