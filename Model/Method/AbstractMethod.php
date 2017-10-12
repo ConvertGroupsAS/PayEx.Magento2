@@ -274,8 +274,7 @@ abstract class AbstractMethod extends \Magento\Payment\Model\Method\AbstractMeth
                 null,
                 true
             );
-
-            throw new \Exception('PayEx: Can not cancel order');
+            throw $e;
         }
         if ($result['code'] === 'OK' && $result['errorCode'] === 'OK' && $result['description'] === 'OK') {
             // Add Cancel Transaction
