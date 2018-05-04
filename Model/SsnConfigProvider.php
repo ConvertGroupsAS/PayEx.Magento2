@@ -5,6 +5,7 @@ namespace PayEx\Payments\Model;
 use Magento\Checkout\Model\ConfigProviderInterface;
 use Magento\Framework\App\Config\ScopeConfigInterface;
 use Magento\Store\Model\StoreManagerInterface;
+use Magento\Store\Model\ScopeInterface;
 use Magento\Checkout\Model\Session;
 
 class SsnConfigProvider implements ConfigProviderInterface
@@ -13,17 +14,17 @@ class SsnConfigProvider implements ConfigProviderInterface
     /**
      * @var ScopeConfigInterface
      */
-    protected $scopeConfig;
+    private $scopeConfig;
 
     /**
      * @var StoreManagerInterface
      */
-    protected $storeManager;
+    private $storeManager;
 
     /**
      * @var \Magento\Checkout\Model\Session
      */
-    protected $session;
+    private $session;
 
     /**
      * Constructor
@@ -35,8 +36,8 @@ class SsnConfigProvider implements ConfigProviderInterface
         ScopeConfigInterface $scopeConfig,
         StoreManagerInterface $storeManager,
         Session $session
-    )
-    {
+    ) {
+    
         $this->scopeConfig = $scopeConfig;
         $this->storeManager = $storeManager;
         $this->session = $session;
@@ -50,8 +51,8 @@ class SsnConfigProvider implements ConfigProviderInterface
         return [
             'payexSSN' => [
                 'isEnabled' => (bool)$this->scopeConfig->getValue(
-                    'payex/ssn/enable',
-                    \Magento\Store\Model\ScopeInterface::SCOPE_STORE,
+                    'payment/payex_financing/checkout_field',
+                    ScopeInterface::SCOPE_STORE,
                     $this->storeManager->getStore()->getCode()
                 ),
                 'appliedSSN' => $this->session->getPayexSSN()

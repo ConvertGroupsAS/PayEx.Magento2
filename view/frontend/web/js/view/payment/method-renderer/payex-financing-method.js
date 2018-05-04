@@ -7,9 +7,9 @@ define(
         'Magento_Checkout/js/view/payment/default',
         'mage/translate',
         'Magento_Checkout/js/model/full-screen-loader',
-        'Magento_Ui/js/modal/alert'
+        'PayEx_Payments/js/action/get-terms-of-service'
     ],
-    function (ko, $, Component, $t, fullScreenLoader, alert) {
+    function (ko, $, Component, $t, fullScreenLoader, getTermsAction) {
         'use strict';
         var appliedSSN = window.checkoutConfig.payexSSN.appliedSSN;
 
@@ -34,14 +34,14 @@ define(
             /**
              * Is Applied SSN
              */
-            isAppliedSSN: function() {
+            isAppliedSSN: function () {
                 return !!appliedSSN;
             },
 
             /**
              * Get Applied SSN
              */
-            getAppliedSSN: function() {
+            getAppliedSSN: function () {
                 return appliedSSN;
             },
 
@@ -49,25 +49,8 @@ define(
              * Show Terms Of Service Window
              * @returns {boolean}
              */
-            showTOS: function() {
-                $.ajax('/payex/checkout/termsOfService', {
-                    data: {
-                        method: this.getCode()
-                    },
-                    beforeSend: function() {
-                        fullScreenLoader.startLoader();
-                    }
-                }).always(function() {
-                    fullScreenLoader.stopLoader();
-                }).done(function(response) {
-                    alert({
-                        title: response.title,
-                        content: response.content,
-                        actions: {
-                            always: function(){}
-                        }
-                    });
-                });
+            showTOS: function () {
+                getTermsAction(this.getCode());
 
                 return false;
             }

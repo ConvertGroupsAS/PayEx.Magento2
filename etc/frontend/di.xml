@@ -10,6 +10,13 @@
     <type name="Magento\Checkout\Model\CompositeConfigProvider">
         <arguments>
             <argument name="configProviders" xsi:type="array">
+                <item name="payex_psp_config_provider" xsi:type="object">PayEx\Payments\Model\PspConfigProvider</item>
+            </argument>
+        </arguments>
+    </type>
+    <type name="Magento\Checkout\Model\CompositeConfigProvider">
+        <arguments>
+            <argument name="configProviders" xsi:type="array">
                 <item name="payex_fee_config_provider" xsi:type="object">PayEx\Payments\Model\FeeConfigProvider</item>
             </argument>
         </arguments>
@@ -20,5 +27,8 @@
                 <item name="payex_ssn_config_provider" xsi:type="object">PayEx\Payments\Model\SsnConfigProvider</item>
             </argument>
         </arguments>
+    </type>
+    <type name="Magento\Checkout\Block\Checkout\LayoutProcessor">
+        <plugin name="removeBillingAddressComponent" type="PayEx\Payments\Model\Checkout\LayoutProcessor\Plugin" />
     </type>
 </config>

@@ -4,6 +4,7 @@ namespace PayEx\Payments\Model\Method;
 
 use Magento\Framework\DataObject;
 use Magento\Framework\Exception\LocalizedException;
+use Magento\Sales\Model\Order;
 
 /**
  * Class Swish
@@ -74,6 +75,15 @@ class Swish extends \PayEx\Payments\Model\Method\Cc
         // Get Additional Values
         $additional = '';
 
+        // Also send mobile number if available
+        $telephone = str_replace([' ', '-'], '', $order->getBillingAddress()->getTelephone());
+        $mobile_prefixes = ['070', '072', '073', '076', '079'];
+        if (mb_strlen($telephone, 'UTF-8') == 10 &&
+            in_array(mb_substr($telephone, 0, 3, 'UTF-8'), $mobile_prefixes)
+        ) {
+            $additional = 'MSISDN=46' . mb_substr($telephone, 1, null, 'UTF-8');
+        }
+
         // Responsive Skinning
         if ($this->getConfigData('responsive') === '1') {
             $separator = (!empty($additional) && mb_substr($additional, -1) !== '&') ? '&' : '';
@@ -87,7 +97,9 @@ class Swish extends \PayEx\Payments\Model\Method\Cc
         }
 
         // Get Amount
-        $amount = $order->getGrandTotal();
+        //$amount = $order->getGrandTotal();
+        $items = $this->payexHelper->getOrderItems($order);
+        $amount = array_sum(array_column($items, 'price_with_tax'));
 
         // Call PxOrder.Initialize8
         $params = [
@@ -162,11 +174,22 @@ class Swish extends \PayEx\Payments\Model\Method\Cc
         }
 
         // Set Pending Payment status
-        $order->addStatusHistoryComment(__('The customer was redirected to PayEx.'), \Magento\Sales\Model\Order::STATE_PENDING_PAYMENT);
+        $order->setCanSendNewEmailFlag(false);
+        $order->addStatusHistoryComment(
+            __('The customer was redirected to PayEx.'),
+            Order::STATE_PENDING_PAYMENT
+        );
         $order->save();
 
+        // Set state object
+        /** @var \Magento\Sales\Model\Order\Status $status */
+        $status = $this->payexHelper->getAssignedState(Order::STATE_PENDING_PAYMENT);
+        $stateObject->setState($status->getState());
+        $stateObject->setStatus($status->getStatus());
+        $stateObject->setIsNotified(false);
+
         // Save Redirect URL in Session
-        $this->session->setPayexRedirectUrl($redirectUrl);
+        $this->checkoutHelper->getCheckout()->setPayexRedirectUrl($redirectUrl);
 
         return $this;
     }

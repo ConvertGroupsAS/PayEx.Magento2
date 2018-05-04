@@ -4,6 +4,7 @@ namespace PayEx\Payments\Model\Method;
 
 use Magento\Framework\DataObject;
 use Magento\Framework\Exception\LocalizedException;
+use \Magento\Sales\Model\Order;
 
 /**
  * Class MasterPass
@@ -47,7 +48,6 @@ class MobilePay extends \PayEx\Payments\Model\Method\Cc
     protected $_isInitializeNeeded = true;
     protected $_canFetchTransactionInfo = true;
 
-
     /**
      * Method that will be executed instead of authorize or capture
      * if flag isInitializeNeeded set to true
@@ -88,7 +88,9 @@ class MobilePay extends \PayEx\Payments\Model\Method\Cc
         }
 
         // Get Amount
-        $amount = $order->getGrandTotal();
+        //$amount = $order->getGrandTotal();
+        $items = $this->payexHelper->getOrderItems($order);
+        $amount = array_sum(array_column($items, 'price_with_tax'));
 
         // Call PxOrder.Initialize8
         $params = [
@@ -163,11 +165,19 @@ class MobilePay extends \PayEx\Payments\Model\Method\Cc
         }
 
         // Set Pending Payment status
-        $order->addStatusHistoryComment(__('The customer was redirected to PayEx.'), \Magento\Sales\Model\Order::STATE_PENDING_PAYMENT);
+        $order->setCanSendNewEmailFlag(false);
+        $order->addStatusHistoryComment(__('The customer was redirected to PayEx.'), Order::STATE_PENDING_PAYMENT);
         $order->save();
 
+        // Set state object
+        /** @var \Magento\Sales\Model\Order\Status $status */
+        $status = $this->payexHelper->getAssignedState(Order::STATE_PENDING_PAYMENT);
+        $stateObject->setState($status->getState());
+        $stateObject->setStatus($status->getStatus());
+        $stateObject->setIsNotified(false);
+
         // Save Redirect URL in Session
-        $this->session->setPayexRedirectUrl($redirectUrl);
+        $this->checkoutHelper->getCheckout()->setPayexRedirectUrl($redirectUrl);
 
         return $this;
     }

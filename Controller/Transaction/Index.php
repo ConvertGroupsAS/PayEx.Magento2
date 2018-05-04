@@ -3,6 +3,7 @@ namespace PayEx\Payments\Controller\Transaction;
 
 use Zend\Log\Logger;
 use Zend\Log\Writer\Stream;
+use Magento\Framework\App\Action\Action;
 
 /**
  * Class Index
@@ -10,10 +11,10 @@ use Zend\Log\Writer\Stream;
  * @see http://www.payexpim.com/quick-guide/9-transaction-callback/
  * @package PayEx\Payments\Controller\Transaction
  */
-class Index extends \Magento\Framework\App\Action\Action
+class Index extends Action
 {
     /** @var array PayEx TC Spider IPs */
-    static protected $_allowed_ips = [
+    static private $allowed_ips = [
         '82.115.146.170', // Production
         '82.115.146.10' // Test
     ];
@@ -21,12 +22,12 @@ class Index extends \Magento\Framework\App\Action\Action
     /**
      * @var \PayEx\Payments\Helper\Data
      */
-    protected $payexHelper;
+    private $payexHelper;
 
     /**
      * @var \Magento\Framework\Controller\Result\RawFactory
      */
-    protected $rawResultFactory;
+    private $rawResultFactory;
 
     /**
      * Constructor
@@ -38,8 +39,8 @@ class Index extends \Magento\Framework\App\Action\Action
         \Magento\Framework\App\Action\Context $context,
         \Magento\Framework\Controller\Result\RawFactory $rawResultFactory,
         \PayEx\Payments\Helper\Data $payexHelper
-    )
-    {
+    ) {
+    
         parent::__construct($context);
         $this->rawResultFactory = $rawResultFactory;
         $this->payexHelper = $payexHelper;
@@ -50,6 +51,10 @@ class Index extends \Magento\Framework\App\Action\Action
      *
      * @return \Magento\Framework\Controller\ResultInterface|ResponseInterface
      * @throws \Magento\Framework\Exception\NotFoundException
+     * @SuppressWarnings(Generic.Metrics.CyclomaticComplexity.MaxExceeded)
+     * @SuppressWarnings(MEQP2.Classes.ObjectInstantiation.FoundDirectInstantiation)
+     * @SuppressWarnings(MEQP2.Classes.ObjectManager.ObjectManagerFound)
+     * @SuppressWarnings(Generic.Files.LineLength.TooLong)
      */
     public function execute()
     {
@@ -65,7 +70,7 @@ class Index extends \Magento\Framework\App\Action\Action
         $result = $this->rawResultFactory->create();
 
         // Check is PayEx Request
-        if (!in_array($remote_addr, self::$_allowed_ips)) {
+        if (!in_array($remote_addr, self::$allowed_ips)) {
             $logger->err('Access denied for this request. It\'s not PayEx Spider.', [$remote_addr]);
             $result->setStatusHeader('403', '1.1', 'Access denied. Accept PayEx Transaction Callback only.');
             $result->setContents('Error: Access denied. Accept PayEx Transaction Callback only.');
@@ -75,8 +80,8 @@ class Index extends \Magento\Framework\App\Action\Action
         // Check Post Fields
         if (count($this->getRequest()->getParams()) === 0) {
             $logger->err('Empty request received');
-            $result->setStatusHeader('500', '1.1', 'FAILURE');
-            $result->setContents('FAILURE');
+            $result->setStatusHeader('200', '1.1', 'FAILED');
+            $result->setContents('FAILED');
             return $result;
         }
 
@@ -87,8 +92,8 @@ class Index extends \Magento\Framework\App\Action\Action
         $order_id = $this->getRequest()->getParam('orderId');
         if (empty($order_id)) {
             $logger->err('Param orderId is undefined');
-            $result->setStatusHeader('500', '1.1', 'FAILURE');
-            $result->setContents('FAILURE');
+            $result->setStatusHeader('200', '1.1', 'FAILED');
+            $result->setContents('FAILED');
             return $result;
         }
 
@@ -98,8 +103,8 @@ class Index extends \Magento\Framework\App\Action\Action
         $order = $orderFactory->create()->loadByIncrementId($order_id);
         if (!$order->getId()) {
             $logger->err('Order don\'t exists in store', [$order_id]);
-            $result->setStatusHeader('500', '1.1', 'FAILURE');
-            $result->setContents('FAILURE');
+            $result->setStatusHeader('200', '1.1', 'FAILED');
+            $result->setContents('FAILED');
             return $result;
         }
 
@@ -109,8 +114,8 @@ class Index extends \Magento\Framework\App\Action\Action
         $payment_method_code = $payment_method->getCode();
         if (strpos($payment_method_code, 'payex_') === false) {
             $logger->err('Unsupported payment method', [$payment_method_code]);
-            $result->setStatusHeader('500', '1.1', 'FAILURE');
-            $result->setContents('FAILURE');
+            $result->setStatusHeader('200', '1.1', 'FAILED');
+            $result->setContents('FAILED');
             return $result;
         }
 
@@ -122,8 +127,8 @@ class Index extends \Magento\Framework\App\Action\Action
         // Check Requested Account Number
         if ($this->getRequest()->getParam('accountNumber') !== $accountNumber) {
             $logger->err('Can\'t to get API details of merchant account', [$this->getRequest()->getParam('accountNumber')]);
-            $result->setStatusHeader('500', '1.1', 'FAILURE');
-            $result->setContents('FAILURE');
+            $result->setStatusHeader('200', '1.1', 'FAILED');
+            $result->setContents('FAILED');
             return $result;
         }
 
@@ -140,10 +145,10 @@ class Index extends \Magento\Framework\App\Action\Action
             $order->getId()
         );
 
-        if (!$transaction) {
+        if ($transaction) {
             $logger->info('Transaction already processed', [$transactionId]);
-            $result->setStatusHeader('500', '1.1', 'FAILURE');
-            $result->setContents('FAILURE');
+            $result->setStatusHeader('200', '1.1', 'OK');
+            $result->setContents('OK');
             return $result;
         }
 
@@ -158,8 +163,8 @@ class Index extends \Magento\Framework\App\Action\Action
         $details = $this->payexHelper->getPx()->GetTransactionDetails2($params);
         if ($details['code'] !== 'OK' || $details['errorCode'] !== 'OK') {
             $logger->err('Failed to get transaction details', $details);
-            $result->setStatusHeader('500', '1.1', 'FAILURE');
-            $result->setContents('FAILURE');
+            $result->setStatusHeader('200', '1.1', 'FAILED');
+            $result->setContents('FAILED');
             return $result;
         }
 
@@ -179,8 +184,8 @@ class Index extends \Magento\Framework\App\Action\Action
         $transaction = $this->payexHelper->addPaymentTransaction($order, $details);
         if (!$transaction) {
             $logger->err('Failed to save transaction', [$transactionId]);
-            $result->setStatusHeader('500', '1.1', 'FAILURE');
-            $result->setContents('FAILURE');
+            $result->setStatusHeader('200', '1.1', 'FAILED');
+            $result->setContents('FAILED');
             return $result;
         }
 
@@ -188,7 +193,7 @@ class Index extends \Magento\Framework\App\Action\Action
         $order->getPayment()->setLastTransId($transactionId)->save();
 
         // Check Order and Transaction Result
-        /* Transaction statuses: 0=Sale, 1=Initialize, 2=Credit, 3=Authorize, 4=Cancel, 5=Failure, 6=Capture */
+        /* Transaction statuses: 0=Sale, 1=Initialize, 2=Credit, 3=Authorize, 4=Cancel, 5=FAILED, 6=Capture */
         switch ($transaction_status) {
             case 0:
             case 1:
@@ -202,19 +207,19 @@ class Index extends \Magento\Framework\App\Action\Action
                     'accountNumber' => '',
                     'orderRef' => $this->getRequest()->getParam('orderRef'),
                 ];
-                $result = $this->payexHelper->getPx()->Complete($params);
-                if ($result['errorCodeSimple'] !== 'OK') {
-                    $logger->err('Failed to complete payment', $result);
-                    $result->setStatusHeader('500', '1.1', 'FAILURE');
-                    $result->setContents('FAILURE');
+                $px_result = $this->payexHelper->getPx()->Complete($params);
+                if ($px_result['errorCodeSimple'] !== 'OK') {
+                    $logger->err('Failed to complete payment', $px_result);
+                    $result->setStatusHeader('200', '1.1', 'FAILED');
+                    $result->setContents('FAILED');
                     return $result;
                 }
 
                 // Verify transaction status
-                if ((int)$result['transactionStatus'] !== $transaction_status) {
+                if ((int)$px_result['transactionStatus'] !== $transaction_status) {
                     $logger->err('Failed to complete payment. Transaction status is different');
-                    $result->setStatusHeader('500', '1.1', 'FAILURE');
-                    $result->setContents('FAILURE');
+                    $result->setStatusHeader('200', '1.1', 'FAILED');
+                    $result->setContents('FAILED');
                     return $result;
                 }
 
@@ -222,7 +227,7 @@ class Index extends \Magento\Framework\App\Action\Action
                 if (in_array($transaction_status, [0, 6])) {
                     $new_status = $order_status_capture;
                     $message = __('Payment has been captured');
-                } elseif ($transaction_status === 3 || (isset($result['pending']) && $result['pending'] === 'true')) {
+                } elseif ($transaction_status === 3 || (isset($px_result['pending']) && $px_result['pending'] === 'true')) {
                     $new_status = $order_status_authorize;
                     $message = __('Payment has been authorized');
                 } else {
@@ -310,8 +315,8 @@ class Index extends \Magento\Framework\App\Action\Action
                 break;
             default:
                 $logger->err('Unknown Transaction Status', [$order_id]);
-                $result->setStatusHeader('500', '1.1', 'FAILURE');
-                $result->setContents('FAILURE');
+                $result->setStatusHeader('200', '1.1', 'FAILED');
+                $result->setContents('FAILED');
                 return $result;
         }
 

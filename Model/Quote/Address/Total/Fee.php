@@ -6,6 +6,7 @@ use Magento\Quote\Model\Quote;
 use Magento\Quote\Model\Quote\Address\Total\AbstractTotal;
 use Magento\Quote\Model\Quote\Address\Total;
 use Magento\Quote\Api\Data\ShippingAssignmentInterface;
+use Magento\Store\Model\StoreManagerInterface;
 use Magento\Framework\Pricing\PriceCurrencyInterface;
 use Magento\Framework\App\Config\ScopeConfigInterface;
 use Magento\Tax\Model\Calculation;
@@ -17,7 +18,7 @@ class Fee extends AbstractTotal
      *
      * @var array
      */
-    protected static $allowed_methods = [
+    private static $allowed_methods = [
         'payex_financing',
         'payex_partpayment'
     ];
@@ -25,36 +26,41 @@ class Fee extends AbstractTotal
     /**
      * @var \Magento\Store\Model\StoreManagerInterface
      */
-    protected $storeManager;
+    private $storeManager;
 
     /**
      * @var PriceCurrencyInterface
      */
-    protected $priceCurrency;
+    private $priceCurrency;
 
     /**
      * @var \Magento\Checkout\Helper\Data
      */
-    protected $checkoutHelper;
+    private $checkoutHelper;
 
     /**
      * @var \PayEx\Payments\Helper\Data
      */
-    protected $payexHelper;
+    private $payexHelper;
 
     /**
      * @var ScopeConfigInterface
      */
-    protected $scopeConfig;
+    private $scopeConfig;
 
     /**
      * @var Calculation
      */
-    protected $calculationTool;
+    private $calculationTool;
+
+    /**
+     * @var \Magento\Tax\Helper\Data
+     */
+    private $taxHelper;
 
     /**
      * Constructor
-     * @param \Magento\Store\Model\StoreManagerInterface $storeManager
+     * @param StoreManagerInterface $storeManager
      * @param PriceCurrencyInterface $priceCurrency
      * @param \Magento\Checkout\Helper\Data $checkoutHelper
      * @param \PayEx\Payments\Helper\Data $payexHelper ,
@@ -62,20 +68,22 @@ class Fee extends AbstractTotal
      * @param Calculation $calculationTool
      */
     public function __construct(
-        \Magento\Store\Model\StoreManagerInterface $storeManager,
+        StoreManagerInterface $storeManager,
         PriceCurrencyInterface $priceCurrency,
         \Magento\Checkout\Helper\Data $checkoutHelper,
         \PayEx\Payments\Helper\Data $payexHelper,
         ScopeConfigInterface $scopeConfig,
-        Calculation $calculationTool
-    )
-    {
+        Calculation $calculationTool,
+        \Magento\Tax\Helper\Data $taxHelper
+    ) {
+    
         $this->storeManager = $storeManager;
         $this->priceCurrency = $priceCurrency;
         $this->checkoutHelper = $checkoutHelper;
         $this->payexHelper = $payexHelper;
         $this->scopeConfig = $scopeConfig;
         $this->calculationTool = $calculationTool;
+        $this->taxHelper = $taxHelper;
 
         $this->setCode('payex_payment_fee');
     }
@@ -95,8 +103,8 @@ class Fee extends AbstractTotal
         Quote $quote,
         ShippingAssignmentInterface $shippingAssignment,
         Total $total
-    )
-    {
+    ) {
+    
         parent::collect($quote, $shippingAssignment, $total);
 
         $store = $this->storeManager->getStore($quote->getStoreId());
@@ -117,7 +125,11 @@ class Fee extends AbstractTotal
         $total->setBasePayexPaymentFeeTax(0);
         $total->setPayexPaymentFeeTax(0);
 
-        if (!count($shippingAssignment->getItems())) {
+        if (count($shippingAssignment->getItems()) === 0) {
+            return $this;
+        }
+
+        if (!$quote->getPayment()->getMethod()) {
             return $this;
         }
 
@@ -138,7 +150,30 @@ class Fee extends AbstractTotal
         // Calculate Payment Fee
         $price = (float)$payment_method->getConfigData('paymentfee', $store->getStoreId());
         $tax_class = $payment_method->getConfigData('paymentfee_tax_class', $store->getStoreId());
-        $fee = $this->payexHelper->getPaymentFeePrice($price, $tax_class);
+        //$fee = $this->payexHelper->getPaymentFeePrice($price, $tax_class);
+
+        // Get Tax Rate
+        /** @var \Magento\Framework\DataObject $request */
+        $request = $this->calculationTool->getRateRequest(
+            $quote->getShippingAddress(),
+            $quote->getBillingAddress(),
+            $quote->getCustomerTaxClassId(),
+            $quote->getStore()
+        );
+
+        $taxRate = $this->calculationTool->getRate($request->setProductClassId($tax_class));
+        $priceIncludeTax = $this->taxHelper->priceIncludesTax($quote->getStore());
+        $taxAmount = $this->calculationTool->calcTaxAmount($price, $taxRate, $priceIncludeTax, true);
+        if ($priceIncludeTax) {
+            $price -= $taxAmount;
+        }
+
+        $fee = new \Magento\Framework\DataObject;
+        $fee->setPaymentFeeExclTax($price)
+            ->setPaymentFeeInclTax($price + $taxAmount)
+            ->setPaymentFeeTax($taxAmount)
+            ->setRateRequest($request);
+
         if (abs($fee->getPaymentFeeExclTax()) === 0) {
             return $this;
         }
@@ -176,7 +211,8 @@ class Fee extends AbstractTotal
 
         // Save Applied Taxes
         if ($address->getBaseTaxAmount() > 0) {
-            $this->_saveAppliedTaxes($total,
+            $this->_saveAppliedTaxes(
+                $total,
                 $this->calculationTool->getAppliedRates($fee->getRateRequest()),
                 $this->priceCurrency->convert($fee->getPaymentFeeTax(), $store),
                 $fee->getPaymentFeeTax(),
@@ -198,8 +234,8 @@ class Fee extends AbstractTotal
     public function fetch(
         Quote $quote,
         Total $total
-    )
-    {
+    ) {
+    
         return [
             [
                 'code' => $this->getCode(),

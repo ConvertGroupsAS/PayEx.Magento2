@@ -3,6 +3,7 @@
 namespace PayEx\Payments\Block\Info;
 
 use Magento\Framework\View\Element\Template;
+use Magento\Sales\Model\Order\Payment\Transaction;
 
 abstract class AbstractInfo extends \Magento\Payment\Block\Info
 {
@@ -43,8 +44,8 @@ abstract class AbstractInfo extends \Magento\Payment\Block\Info
         \PayEx\Payments\Model\Config\Source\TransactionStatus $transactionStatus,
         Template\Context $context,
         array $data = []
-    )
-    {
+    ) {
+    
         parent::__construct($context, $data);
         $this->payexHelper = $payexHelper;
         $this->transactionStatus = $transactionStatus->toOptionArray();
@@ -61,49 +62,72 @@ abstract class AbstractInfo extends \Magento\Payment\Block\Info
         // Get Payment Info
         /** @var \Magento\Payment\Model\Info $_info */
         $_info = $this->getInfo();
-        if ($_info) {
-            $transactionId = $_info->getLastTransId();
+        if ($_info && $transactionId = $_info->getLastTransId()) {
+            // Load transaction
+            $transaction = $this->transactionRepository->getByTransactionId(
+                $transactionId,
+                $_info->getOrder()->getPayment()->getId(),
+                $_info->getOrder()->getId()
+            );
 
-            if ($transactionId) {
-                // Load transaction
-                $transaction = $this->transactionRepository->getByTransactionId(
-                    $transactionId,
-                    $_info->getOrder()->getPayment()->getId(),
-                    $_info->getOrder()->getId()
-                );
+            if ($transaction) {
+                $transaction_data = $transaction->getAdditionalInformation(Transaction::RAW_DETAILS);
+                if (!$transaction_data) {
+                    $payment = $_info->getOrder()->getPayment();
+                    $transaction_data = $payment->getMethodInstance()->fetchTransactionInfo($payment, $transactionId);
+                    $transaction->setAdditionalInformation(Transaction::RAW_DETAILS, $transaction_data);
+                    $transaction->save();
+                }
 
-                if ($transaction) {
-                    $transaction_data = $transaction->getAdditionalInformation(\Magento\Sales\Model\Order\Payment\Transaction::RAW_DETAILS);
-                    if (!$transaction_data) {
-                        $payment = $_info->getOrder()->getPayment();
-                        $transaction_data = $payment->getMethodInstance()->fetchTransactionInfo($payment, $transactionId);
-                        $transaction->setAdditionalInformation(\Magento\Sales\Model\Order\Payment\Transaction::RAW_DETAILS, $transaction_data);
-                        $transaction->save();
-                    }
+                // Filter empty values
+                $transaction_data = array_filter($transaction_data, 'strlen');
 
-                    // Filter empty values
-                    $transaction_data = array_filter($transaction_data, 'strlen');
-
-                    $result = [];
-                    foreach ($this->transactionFields as $description => $list) {
-                        foreach ($list as $key => $value) {
-                            if (isset($transaction_data[$value])) {
-                                if ($value == 'transactionStatus') {
-                                    if (isset($this->transactionStatus[$transaction_data[$value]]) && isset($this->transactionStatus[$transaction_data[$value]]['value'])) {
-                                        $transaction_data[$value] = $this->transactionStatus[$transaction_data[$value]]['value'];
-                                    }
+                $result = [];
+                foreach ($this->transactionFields as $description => $list) {
+                    foreach ($list as $key => $value) {
+                        if (isset($transaction_data[$value])) {
+                            if ($value == 'transactionStatus') {
+                                if (isset($this->transactionStatus[$transaction_data[$value]]) && isset($this->transactionStatus[$transaction_data[$value]]['value'])) {
+                                    $transaction_data[$value] = $this->transactionStatus[$transaction_data[$value]]['value'];
                                 }
-
-                                $result[$description] = $transaction_data[$value];
                             }
+
+                            $result[$description] = $transaction_data[$value];
                         }
                     }
-
-                    return $result;
                 }
+                return $result;
             }
         }
 
         return $this->_prepareSpecificInformation()->getData();
+    }
+
+    /**
+     * Get Transaction Status Label
+     * @param $code
+     *
+     * @return \Magento\Framework\Phrase
+     */
+    public function getTransactionStatusLabel($code)
+    {
+        switch ($code) {
+            case '0':
+                return __('Sale');
+            case '1':
+                return __('Initialize');
+            case '2':
+                return __('Credit');
+            case '3':
+                return __('Authorize');
+            case '4':
+                return __('Cancel');
+            case '5':
+                return __('Failure');
+            case '6':
+                return __('Capture');
+            default:
+                return __('Unknown');
+        }
     }
 }

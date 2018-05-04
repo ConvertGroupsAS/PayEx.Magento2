@@ -3,7 +3,10 @@
 namespace PayEx\Payments\Helper;
 
 use PayEx\Px;
+use FullNameParser;
 use DOMDocument;
+use Ramsey\Uuid\Uuid;
+use Ramsey\Uuid\Exception\UnsatisfiedDependencyException;
 use Magento\Framework\App\Helper\AbstractHelper;
 use Magento\Sales\Model\Order\Payment\Transaction;
 use Magento\Framework\DataObject;
@@ -17,54 +20,114 @@ class Data extends AbstractHelper
     const MODULE_NAME = 'PayEx_Payments';
 
     /**
+     * @var \Psr\Log\LoggerInterface
+     */
+    private $logger;
+
+    /**
      * @var \Magento\Framework\Encryption\EncryptorInterface
      */
-    protected $_encryptor;
+    private $encryptor;
 
     /**
      * @var \Magento\Payment\Model\Config
      */
-    protected $_config;
+    private $config;
 
     /**
      * @var \Magento\Framework\Module\ModuleListInterface
      */
-    protected $_moduleList;
+    private $moduleList;
+
+    /**
+     * @var \Magento\Framework\Locale\Resolver
+     */
+    private $resolver;
 
     /**
      * @var \Magento\Sales\Model\Order\Config
      */
-    protected $_orderConfig;
+    private $orderConfig;
 
     /**
      * @var \PayEx\Px
      */
-    protected $_px;
+    private $px;
 
     /**
      * @var \Magento\Sales\Model\ResourceModel\Order\Status\CollectionFactory
      */
-    protected $orderStatusCollectionFactory;
+    private $orderStatusCollectionFactory;
 
     /**
      * @var \Magento\Sales\Model\Service\InvoiceService
      */
-    protected $invoiceService;
+    private $invoiceService;
 
     /**
      * @var \Magento\Sales\Model\Order\Email\Sender\InvoiceSender
      */
-    protected $invoiceSender;
+    private $invoiceSender;
+
+    /**
+     * @var \Magento\Framework\DB\Transaction
+     */
+    private $transaction;
 
     /**
      * @var \Magento\Tax\Helper\Data
      */
-    protected $taxHelper;
+    private $taxHelper;
 
     /**
      * @var \Magento\Framework\App\ProductMetadata
      */
-    protected $productMetadata;
+    private $productMetadata;
+
+    /**
+     * @var \Magento\Store\Model\StoreManagerInterface
+     */
+    private $storeManager;
+
+    /**
+     * @var \Magento\Framework\HTTP\PhpEnvironment\RemoteAddress
+     */
+    private $remoteAddress;
+
+    /**
+     * @var FullNameParser
+     */
+    private $nameParser;
+
+    /**
+     * @var \PayEx\Payments\Model\Config\Source\Language
+     */
+    private $language;
+
+    /**
+     * @var \Magento\Catalog\Helper\Image
+     */
+    private $imageHelper;
+
+    /**
+     * @var \Magento\Checkout\Helper\Data
+     */
+    private $checkoutHelper;
+
+    /**
+     * @var \Magento\Tax\Model\Calculation
+     */
+    private $calculationTool;
+
+    /**
+     * @var \Magento\Directory\Model\Country
+     */
+    private $country;
+
+    /**
+     * @var \Magento\Quote\Model\QuoteFactory
+     */
+    private $quoteFactory;
 
     /**
      * Data constructor.
@@ -72,38 +135,73 @@ class Data extends AbstractHelper
      * @param \Magento\Framework\Encryption\EncryptorInterface $encryptor
      * @param \Magento\Payment\Model\Config $config
      * @param \Magento\Framework\Module\ModuleListInterface $moduleList
+     * @param \Magento\Framework\Locale\Resolver $resolver
      * @param \Magento\Sales\Model\Order\Config $orderConfig
      * @param \Magento\Sales\Model\ResourceModel\Order\Status\CollectionFactory $orderStatusCollectionFactory
      * @param \Magento\Sales\Model\Service\InvoiceService $invoiceService
      * @param \Magento\Sales\Model\Order\Email\Sender\InvoiceSender $invoiceSender
+     * @param \Magento\Framework\DB\Transaction $transaction
      * @param \Magento\Tax\Helper\Data $taxHelper
      * @param \Magento\Framework\App\ProductMetadata $productMetadata
+     * @param \Magento\Store\Model\StoreManagerInterface $storeManager
+     * @param Px $px
+     * @param FullNameParser $nameParser
+     * @param \PayEx\Payments\Model\Config\Source\Language $language
+     * @param \Magento\Catalog\Helper\Image $imageHelper
+     * @param \Magento\Checkout\Helper\Data $checkoutHelper
+     * @param \Magento\Tax\Model\Calculation $calculationTool
+     * @param \Magento\Directory\Model\Country $country
+     * @param \Magento\Quote\Model\QuoteFactory $quoteFactory
      */
     public function __construct(
         \Magento\Framework\App\Helper\Context $context,
         \Magento\Framework\Encryption\EncryptorInterface $encryptor,
         \Magento\Payment\Model\Config $config,
         \Magento\Framework\Module\ModuleListInterface $moduleList,
+        \Magento\Framework\Locale\Resolver $resolver,
         \Magento\Sales\Model\Order\Config $orderConfig,
         \Magento\Sales\Model\ResourceModel\Order\Status\CollectionFactory $orderStatusCollectionFactory,
         \Magento\Sales\Model\Service\InvoiceService $invoiceService,
         \Magento\Sales\Model\Order\Email\Sender\InvoiceSender $invoiceSender,
+        \Magento\Framework\DB\Transaction $transaction,
         \Magento\Tax\Helper\Data $taxHelper,
-        \Magento\Framework\App\ProductMetadata $productMetadata
-    )
-    {
+        \Magento\Framework\App\ProductMetadata $productMetadata,
+        \Magento\Store\Model\StoreManagerInterface $storeManager,
+        Px $px,
+        FullNameParser $nameParser,
+        \PayEx\Payments\Model\Config\Source\Language $language,
+        \Magento\Catalog\Helper\Image $imageHelper,
+        \Magento\Checkout\Helper\Data $checkoutHelper,
+        \Magento\Tax\Model\Calculation $calculationTool,
+        \Magento\Directory\Model\Country $country,
+        \Magento\Quote\Model\QuoteFactory $quoteFactory
+    ) {
+
         parent::__construct($context);
-        $this->_encryptor = $encryptor;
-        $this->_config = $config;
-        $this->_moduleList = $moduleList;
-        $this->_orderConfig = $orderConfig;
+        $this->logger = $context->getLogger();
+        $this->encryptor = $encryptor;
+        $this->config = $config;
+        $this->moduleList = $moduleList;
+        $this->resolver = $resolver;
+        $this->orderConfig = $orderConfig;
 
         $this->orderStatusCollectionFactory = $orderStatusCollectionFactory;
         $this->invoiceService = $invoiceService;
         $this->invoiceSender = $invoiceSender;
+        $this->transaction = $transaction;
 
         $this->taxHelper = $taxHelper;
         $this->productMetadata = $productMetadata;
+        $this->storeManager = $storeManager;
+        $this->remoteAddress = $context->getRemoteAddress();
+        $this->px = $px;
+        $this->nameParser = $nameParser;
+        $this->language = $language;
+        $this->imageHelper = $imageHelper;
+        $this->checkoutHelper = $checkoutHelper;
+        $this->calculationTool = $calculationTool;
+        $this->country = $country;
+        $this->quoteFactory = $quoteFactory;
     }
 
     /**
@@ -112,7 +210,7 @@ class Data extends AbstractHelper
      */
     public function getVersion()
     {
-        return $this->_moduleList
+        return $this->moduleList
             ->getOne(self::MODULE_NAME)['setup_version'];
     }
 
@@ -139,16 +237,10 @@ class Data extends AbstractHelper
      * Get Store
      * @param int|string|null|bool|\Magento\Store\Api\Data\StoreInterface $id [optional]
      * @return \Magento\Store\Api\Data\StoreInterface
-     * @throws \Magento\Framework\Exception\NoSuchEntityException
      */
     public function getStore($id = null)
     {
-        /** @var \Magento\Framework\ObjectManagerInterface $om */
-        $om = \Magento\Framework\App\ObjectManager::getInstance();
-
-        /** @var \Magento\Store\Model\StoreManagerInterface $manager */
-        $manager = $om->get('Magento\Store\Model\StoreManagerInterface');
-        return $manager->getStore($id);
+        return $this->storeManager->getStore($id);
     }
 
     /**
@@ -157,13 +249,7 @@ class Data extends AbstractHelper
      */
     public function getRemoteAddr()
     {
-        /** @var \Magento\Framework\ObjectManagerInterface $om */
-        $om = \Magento\Framework\App\ObjectManager::getInstance();
-
-        /** @var \Magento\Framework\HTTP\PhpEnvironment\RemoteAddress $ra */
-        $ra = $om->get('Magento\Framework\HTTP\PhpEnvironment\RemoteAddress');
-
-        return $ra->getRemoteAddress();
+        return $this->remoteAddress->getRemoteAddress();
     }
 
     /**
@@ -172,19 +258,16 @@ class Data extends AbstractHelper
      */
     public function getPx()
     {
-        if (!$this->_px) {
-            $this->_px = new Px();
+        // Set User Agent
+        $this->px->setUserAgent(sprintf(
+            "PayEx.Ecommerce.Php/%s PHP/%s Magento/%s PayEx.Magento2/%s",
+            Px::VERSION,
+            phpversion(),
+            $this->productMetadata->getVersion(),
+            $this->getVersion()
+        ));
 
-            // Set User Agent
-            $this->_px->setUserAgent(sprintf("PayEx.Ecommerce.Php/%s PHP/%s Magento/%s PayEx.Magento2/%s",
-                Px::VERSION,
-                phpversion(),
-                $this->productMetadata->getVersion(),
-                $this->getVersion()
-            ));
-        }
-
-        return $this->_px;
+        return $this->px;
     }
 
     /**
@@ -194,11 +277,10 @@ class Data extends AbstractHelper
      */
     public function getErrorMessageByCode($errorCode)
     {
+        // @codingStandardsIgnoreStart
         $errorMessages = [
             'REJECTED_BY_ACQUIRER' =>
                 __('Your customers bank declined the transaction, your customer can contact their bank for more information'),
-            //'Error_Generic' =>
-            //    __('An unhandled exception occurred'),
             '3DSecureDirectoryServerError' =>
                 __('A problem with Visa or MasterCards directory server, that communicates transactions for 3D-Secure verification'),
             'AcquirerComunicationError' =>
@@ -229,8 +311,6 @@ class Data extends AbstractHelper
                 __('Generic validation error'),
             'ValidationError_HashNotValid' =>
                 __('The hash on request is not valid, this might be due to the encryption key being incorrect'),
-            //'ValidationError_InvalidParameter' =>
-            //    __('One of the input parameters has invalid data. See paramName and description for more information'),
             'OperationCancelledbyCustomer' =>
                 __('The operation was cancelled by the client'),
             'PaymentDeclinedDoToUnspecifiedErr' =>
@@ -262,6 +342,7 @@ class Data extends AbstractHelper
             'NotSupportedPaymentMethod' =>
                 __('Not supported paymentmethod')
         ];
+        // @codingStandardsIgnoreEnd
         $errorMessages = array_change_key_case($errorMessages, CASE_UPPER);
 
         $errorCode = mb_strtoupper($errorCode);
@@ -294,40 +375,54 @@ class Data extends AbstractHelper
     /**
      * Get Order Items
      * @param \Magento\Sales\Model\Order $order
+     * @param string $currency Order Currency
      * @return array
      */
-    public function getOrderItems(\Magento\Sales\Model\Order $order)
+    public function getOrderItems(\Magento\Sales\Model\Order $order, $currency = '')
     {
+        if (empty($currency)) {
+            $currency = $order->getBaseCurrencyCode();
+        }
+
+        // Currency rate
+        $currencyRate = 1;
+        if ($order->getBaseCurrencyCode() != $currency) {
+            // @todo Currency rate calc
+            $currencyRate = $order->getBaseToOrderRate();
+        }
+
         $lines = [];
         $items = $order->getAllVisibleItems();
         foreach ($items as $item) {
             /** @var \Magento\Sales\Model\Order\Item $item */
             // Skip configurable product which should be invisible
-            if ($item->getProductType() === \Magento\Catalog\Model\Product\Type::TYPE_SIMPLE && $item->getParentItem()) {
+            if ($item->getProductType() === \Magento\Catalog\Model\Product\Type::TYPE_SIMPLE &&
+                $item->getParentItem()
+            ) {
                 continue;
             }
 
             $itemQty = (int)$item->getQtyOrdered();
-            $priceWithTax = $item->getRowTotalInclTax();
-            $priceWithoutTax = $item->getRowTotal();
-            $taxPercent = $priceWithoutTax > 0 ? (($priceWithTax / $priceWithoutTax) - 1) * 100 : 0; // works for all types
+            $priceWithTax = $item->getRowTotalInclTax() * $currencyRate;
+            $priceWithoutTax = $item->getRowTotal() * $currencyRate;
+            $taxPercent = $priceWithoutTax > 0 ? (($priceWithTax / $priceWithoutTax) - 1) * 100 : 0;
             $taxPrice = $priceWithTax - $priceWithoutTax;
 
             $lines[] = [
                 'type' => 'product',
                 'name' => $item->getName(),
                 'qty' => $itemQty,
-                'price_with_tax' => $priceWithTax,
-                'price_without_tax' => $priceWithoutTax,
-                'tax_price' => $taxPrice,
-                'tax_percent' => $taxPercent
+                'price_with_tax' => sprintf("%.2f", $priceWithTax),
+                'price_without_tax' => sprintf("%.2f", $priceWithoutTax),
+                'tax_price' => sprintf("%.2f", $taxPrice),
+                'tax_percent' => sprintf("%.2f", $taxPercent)
             ];
         }
 
         // add Shipping
         if (!$order->getIsVirtual()) {
-            $shippingExclTax = $order->getShippingAmount();
-            $shippingIncTax = $order->getShippingInclTax();
+            $shippingExclTax = $order->getShippingAmount() * $currencyRate;
+            $shippingIncTax = $order->getShippingInclTax() * $currencyRate;
             $shippingTax = $shippingIncTax - $shippingExclTax;
 
             // find out tax-rate for the shipping
@@ -341,10 +436,10 @@ class Data extends AbstractHelper
                 'type' => 'shipping',
                 'name' => $order->getShippingDescription(),
                 'qty' => 1,
-                'price_with_tax' => $shippingIncTax,
-                'price_without_tax' => $shippingExclTax,
-                'tax_price' => $shippingTax,
-                'tax_percent' => $shippingTaxRate
+                'price_with_tax' => sprintf("%.2f", $shippingIncTax),
+                'price_without_tax' => sprintf("%.2f", $shippingExclTax),
+                'tax_price' => sprintf("%.2f", $shippingTax),
+                'tax_percent' => sprintf("%.2f", $shippingTaxRate)
             ];
         }
 
@@ -360,8 +455,8 @@ class Data extends AbstractHelper
 
         if ($hasDiscount) {
             $discountData = $this->getOrderDiscountData($order);
-            $discountInclTax = $discountData->getDiscountInclTax();
-            $discountExclTax = $discountData->getDiscountExclTax();
+            $discountInclTax = $discountData->getDiscountInclTax() * $currencyRate;
+            $discountExclTax = $discountData->getDiscountExclTax() * $currencyRate;
             $discountVatAmount = $discountInclTax - $discountExclTax;
             $discountVatPercent = $discountExclTax > 0 ? (($discountInclTax / $discountExclTax) - 1) * 100 : 0;
 
@@ -369,10 +464,10 @@ class Data extends AbstractHelper
                 'type' => 'discount',
                 'name' => __('Discount (%1)', $order->getDiscountDescription()),
                 'qty' => 1,
-                'price_with_tax' => -1 * $discountInclTax,
-                'price_without_tax' => -1 * $discountExclTax,
-                'tax_price' => -1 * $discountVatAmount,
-                'tax_percent' => $discountVatPercent
+                'price_with_tax' => sprintf("%.2f", -1 * $discountInclTax),
+                'price_without_tax' => sprintf("%.2f", -1 * $discountExclTax),
+                'tax_price' => sprintf("%.2f", -1 * $discountVatAmount),
+                'tax_percent' => sprintf("%.2f", $discountVatPercent)
             ];
         }
 
@@ -381,9 +476,10 @@ class Data extends AbstractHelper
             in_array($order->getPayment()->getMethod(), [
                 \PayEx\Payments\Model\Method\Financing::METHOD_CODE,
                 \PayEx\Payments\Model\Method\PartPayment::METHOD_CODE
-            ])) {
-            $feeExclTax = $order->getPayexPaymentFee();
-            $feeTax = $order->getPayexPaymentFeeTax();
+            ])
+        ) {
+            $feeExclTax = $order->getPayexPaymentFee() * $currencyRate;
+            $feeTax = $order->getPayexPaymentFeeTax() * $currencyRate;
             $feeIncTax = $feeExclTax + $feeTax;
             $feeTaxRate = $feeExclTax > 0 ? (($feeIncTax / $feeExclTax) - 1) * 100 : 0;
 
@@ -391,10 +487,10 @@ class Data extends AbstractHelper
                 'type' => 'fee',
                 'name' => __('Payment Fee'),
                 'qty' => 1,
-                'price_with_tax' => $feeIncTax,
-                'price_without_tax' => $feeExclTax,
-                'tax_price' => $feeTax,
-                'tax_percent' => $feeTaxRate
+                'price_with_tax' => sprintf("%.2f", $feeIncTax),
+                'price_without_tax' => sprintf("%.2f", $feeExclTax),
+                'tax_price' => sprintf("%.2f", $feeTax),
+                'tax_percent' => sprintf("%.2f", $feeTaxRate)
             ];
         }
 
@@ -408,10 +504,9 @@ class Data extends AbstractHelper
      */
     public function getAddressInfo(\Magento\Sales\Model\Order $order)
     {
-        $country = \Magento\Framework\App\ObjectManager::getInstance()->get('Magento\Directory\Model\Country');
         $billingAddress = $order->getBillingAddress()->getStreet();
         $billingCountryId = $order->getBillingAddress()->getCountryId();
-        $billingCountry = $country->loadByCode($billingCountryId)->getName();
+        $billingCountry = $this->country->loadByCode($billingCountryId)->getName();
 
         $params = [
             'billingFirstName' => $order->getBillingAddress()->getFirstname(),
@@ -446,7 +541,7 @@ class Data extends AbstractHelper
         if (!$order->getIsVirtual()) {
             $deliveryAddress = $order->getShippingAddress()->getStreet();
             $deliveryCountryId = $order->getShippingAddress()->getCountryId();
-            $deliveryCountry = $country->loadByCode($billingCountryId)->getName();
+            $deliveryCountry = $this->country->loadByCode($billingCountryId)->getName();
 
             $params = array_merge($params, [
                 'deliveryFirstName' => $order->getShippingAddress()->getFirstname(),
@@ -473,9 +568,11 @@ class Data extends AbstractHelper
      * @param $status
      * @return \Magento\Framework\DataObject
      */
-    public function getAssignedState($status) {
+    public function getAssignedState($status)
+    {
         $collection = $this->orderStatusCollectionFactory->create()->joinStates();
-        $status = $collection->addAttributeToFilter('main_table.status', $status)->getFirstItem();
+        $status = $collection->addAttributeToFilter('main_table.status', $status)
+            ->getFirstItem();
         return $status;
     }
 
@@ -490,12 +587,10 @@ class Data extends AbstractHelper
      */
     public function makeInvoice(\Magento\Sales\Model\Order $order, array $qtys = [], $online = false, $comment = '')
     {
-        /** @var \Magento\Framework\ObjectManagerInterface $om */
-        $om = \Magento\Framework\App\ObjectManager::getInstance();
-
         /** @var \Magento\Sales\Model\Order\Invoice $invoice */
         $invoice = $this->invoiceService->prepareInvoice($order, $qtys);
-        $invoice->setRequestedCaptureCase($online ? \Magento\Sales\Model\Order\Invoice::CAPTURE_ONLINE : \Magento\Sales\Model\Order\Invoice::CAPTURE_OFFLINE);
+        $invoice->setRequestedCaptureCase($online ?
+            \Magento\Sales\Model\Order\Invoice::CAPTURE_ONLINE : \Magento\Sales\Model\Order\Invoice::CAPTURE_OFFLINE);
 
         // Add Comment
         if (!empty($comment)) {
@@ -513,9 +608,7 @@ class Data extends AbstractHelper
         $invoice->getOrder()->setIsInProcess(true);
 
         /** @var \Magento\Framework\DB\Transaction $transactionSave */
-        $transactionSave = $om->create(
-            'Magento\Framework\DB\Transaction'
-        )
+        $transactionSave = $this->transaction
             ->addObject($invoice)
             ->addObject($invoice->getOrder());
         $transactionSave->save();
@@ -524,7 +617,7 @@ class Data extends AbstractHelper
         try {
             $this->invoiceSender->send($invoice);
         } catch (\Exception $e) {
-            $om->get('Psr\Log\LoggerInterface')->critical($e);
+            $this->logger->critical($e);
         }
 
         $invoice->setIsPaid(true);
@@ -583,7 +676,9 @@ class Data extends AbstractHelper
             $discountExcl += $shippingDiscount / $shippingTaxRate;
         }
 
+        // @codingStandardsIgnoreStart
         $return = new DataObject;
+        // @codingStandardsIgnoreEnd
         return $return->setDiscountInclTax($discountIncl)->setDiscountExclTax($discountExcl);
     }
 
@@ -604,9 +699,7 @@ class Data extends AbstractHelper
         $transaction_status = !empty($details['transactionStatus']) ? (int)$details['transactionStatus'] : 'undefined';
         switch ($transaction_status) {
             case 1:
-                // From PayEx PIM:
-                // "If PxOrder.Complete returns transactionStatus = 1, then check pendingReason for status."
-                // See http://www.payexpim.com/payment-methods/paypal/
+                // @todo Use $details['pendingReason']
                 if ($details['pending'] === 'true') {
                     $transaction = $order->getPayment()->addTransaction(Transaction::TYPE_AUTH, null, true);
                     $transaction->setIsClosed(0);
@@ -647,6 +740,7 @@ class Data extends AbstractHelper
                 break;
             case 5:
                 $transaction = $order->getPayment()->addTransaction(Transaction::TYPE_PAYMENT, null, true);
+                $transaction->setIsClosed(0);
                 $transaction->setAdditionalInformation(Transaction::RAW_DETAILS, $details);
                 $transaction->save();
                 break;
@@ -663,16 +757,8 @@ class Data extends AbstractHelper
      */
     public function getLanguage()
     {
-        /** @var \Magento\Framework\ObjectManagerInterface $om */
-        $om = \Magento\Framework\App\ObjectManager::getInstance();
-
-        /** @var \Magento\Framework\Locale\Resolver $resolver */
-        $resolver = $om->get('Magento\Framework\Locale\Resolver');
-        $locale = $resolver->getLocale();
-
-        /** @var \PayEx\Payments\Model\Config\Source\Language $language */
-        $language = $om->get('PayEx\Payments\Model\Config\Source\Language');
-        $languages = $language->toOptionArray();
+        $locale = $this->resolver->getLocale();
+        $languages = $this->language->toOptionArray();
         foreach ($languages as $key => $value) {
             if (str_replace('_', '-', $locale) === $value['value']) {
                 return $value['value'];
@@ -688,7 +774,8 @@ class Data extends AbstractHelper
      * @param \Magento\Sales\Model\Order $order
      * @return array
      */
-    public function getInvoiceExtraPrintBlocksXML(\Magento\Sales\Model\Order $order) {
+    public function getInvoiceExtraPrintBlocksXML(\Magento\Sales\Model\Order $order)
+    {
         $lines = $this->getOrderItems($order);
 
         // Replace illegal characters of product names
@@ -704,27 +791,42 @@ class Data extends AbstractHelper
             $lines = array_map(function ($value) use ($replacement_char) {
                 if (isset($value['name'])) {
                     mb_regex_encoding('utf-8');
-                    $value['name'] = mb_ereg_replace('[^a-zA-Z0-9_:!#=?\[\]@{}´ %-\/À-ÖØ-öø-ú]', $replacement_char, $value['name']);
+                    $value['name'] = mb_ereg_replace(
+                        '[^a-zA-Z0-9_:!#=?\[\]@{}´ %-\/À-ÖØ-öø-ú]',
+                        $replacement_char,
+                        $value['name']
+                    );
                 }
                 return $value;
             }, $lines);
         }
 
+        // @codingStandardsIgnoreStart
         $dom = new DOMDocument('1.0', 'utf-8');
+        // @codingStandardsIgnoreEnd
         $OnlineInvoice = $dom->createElement('OnlineInvoice');
         $dom->appendChild($OnlineInvoice);
-        $OnlineInvoice->setAttributeNS('http://www.w3.org/2000/xmlns/', 'xmlns:xsi', 'http://www.w3.org/2001/XMLSchema-instance');
-        $OnlineInvoice->setAttributeNS('http://www.w3.org/2001/XMLSchema-instance', 'xsd', 'http://www.w3.org/2001/XMLSchema');
+        $OnlineInvoice->setAttributeNS(
+            'http://www.w3.org/2000/xmlns/',
+            'xmlns:xsi',
+            'http://www.w3.org/2001/XMLSchema-instance'
+        );
+        $OnlineInvoice->setAttributeNS(
+            'http://www.w3.org/2001/XMLSchema-instance',
+            'xsd',
+            'http://www.w3.org/2001/XMLSchema'
+        );
 
         $OrderLines = $dom->createElement('OrderLines');
         $OnlineInvoice->appendChild($OrderLines);
 
         // Add Order Lines
         foreach ($lines as $line) {
+            $unit_price = $line['qty'] > 0 ? $line['price_without_tax'] / $line['qty'] : 0;
             $OrderLine = $dom->createElement('OrderLine');
             $OrderLine->appendChild($dom->createElement('Product', $line['name']));
             $OrderLine->appendChild($dom->createElement('Qty', $line['qty']));
-            $OrderLine->appendChild($dom->createElement('UnitPrice', sprintf("%.2f", $line['price_without_tax'] / $line['qty'])));
+            $OrderLine->appendChild($dom->createElement('UnitPrice', sprintf("%.2f", $unit_price)));
             $OrderLine->appendChild($dom->createElement('VatRate', sprintf("%.2f", $line['tax_percent'])));
             $OrderLine->appendChild($dom->createElement('VatAmount', sprintf("%.2f", $line['tax_price'])));
             $OrderLine->appendChild($dom->createElement('Amount', sprintf("%.2f", $line['price_with_tax'])));
@@ -739,14 +841,11 @@ class Data extends AbstractHelper
      * @param \Magento\Sales\Model\Order $order
      * @return string
      */
-    public function getOrderShoppingCartXML(\Magento\Sales\Model\Order $order) {
-        /** @var \Magento\Framework\ObjectManagerInterface $om */
-        $om = \Magento\Framework\App\ObjectManager::getInstance();
-
-        /** @var \Magento\Catalog\Helper\Image $imageHelper */
-        $imageHelper = $om->get('Magento\Catalog\Helper\Image');
-
+    public function getOrderShoppingCartXML(\Magento\Sales\Model\Order $order)
+    {
+        // @codingStandardsIgnoreStart
         $dom = new DOMDocument('1.0', 'utf-8');
+        // @codingStandardsIgnoreEnd
         $ShoppingCart = $dom->createElement('ShoppingCart');
         $dom->appendChild($ShoppingCart);
 
@@ -761,7 +860,7 @@ class Data extends AbstractHelper
         foreach ($items as $item) {
             $product = $item->getProduct();
             $qty = $item->getQtyOrdered();
-            $image = $imageHelper->init($product, 'category_page_list')->getUrl();
+            $image = $this->imageHelper->init($product, 'category_page_list')->getUrl();
 
             $ShoppingCartItem = $dom->createElement('ShoppingCartItem');
             $ShoppingCartItem->appendChild($dom->createElement('Description', $item->getName()));
@@ -779,14 +878,11 @@ class Data extends AbstractHelper
      * @param \Magento\Quote\Model\Quote $quote
      * @return mixed
      */
-    public function getQuteShoppingCartXML(\Magento\Quote\Model\Quote $quote) {
-        /** @var \Magento\Framework\ObjectManagerInterface $om */
-        $om = \Magento\Framework\App\ObjectManager::getInstance();
-
-        /** @var \Magento\Catalog\Helper\Image $imageHelper */
-        $imageHelper = $om->get('Magento\Catalog\Helper\Image');
-
+    public function getQuteShoppingCartXML(\Magento\Quote\Model\Quote $quote)
+    {
+        // @codingStandardsIgnoreStart
         $dom = new DOMDocument('1.0', 'utf-8');
+        // @codingStandardsIgnoreEnd
         $ShoppingCart = $dom->createElement('ShoppingCart');
         $dom->appendChild($ShoppingCart);
 
@@ -801,7 +897,7 @@ class Data extends AbstractHelper
         foreach ($items as $item) {
             $product = $item->getProduct();
             $qty = $item->getQty();
-            $image = $imageHelper->init($product, 'category_page_list')->getUrl();
+            $image = $this->imageHelper->init($product, 'category_page_list')->getUrl();
 
             $ShoppingCartItem = $dom->createElement('ShoppingCartItem');
             $ShoppingCartItem->appendChild($dom->createElement('Description', $item->getName()));
@@ -822,39 +918,32 @@ class Data extends AbstractHelper
      */
     public function getPaymentFeePrice($fee, $tax_class)
     {
-        /** @var \Magento\Framework\ObjectManagerInterface $om */
-        $om = \Magento\Framework\App\ObjectManager::getInstance();
-
-        /** @var \Magento\Checkout\Model\Session $session */
-        $session = $om->get('Magento\Checkout\Model\Session');
-
         /** @var \Magento\Quote\Model\Quote $quote */
-        $quote = $session->getQuote();
-
-        /** @var \Magento\Tax\Model\Calculation $calculationTool */
-        $calculationTool = $om->get('Magento\Tax\Model\Calculation');
+        $quote = $this->checkoutHelper->getQuote();
 
         // Get Tax Rate
         /** @var \Magento\Framework\DataObject $request */
-        $request = $calculationTool->getRateRequest(
+        $request = $this->calculationTool->getRateRequest(
             $quote->getShippingAddress(),
             $quote->getBillingAddress(),
             $quote->getCustomerTaxClassId(),
             $quote->getStore()
         );
 
-        $taxRate = $calculationTool->getRate($request->setProductClassId($tax_class));
+        $taxRate = $this->calculationTool->getRate($request->setProductClassId($tax_class));
         $priceIncludeTax = $this->taxHelper->priceIncludesTax($quote->getStore());
-        $taxAmount = $calculationTool->calcTaxAmount($fee, $taxRate, $priceIncludeTax, true);
+        $taxAmount = $this->calculationTool->calcTaxAmount($fee, $taxRate, $priceIncludeTax, true);
         if ($priceIncludeTax) {
             $fee -= $taxAmount;
         }
 
+        // @codingStandardsIgnoreStart
         $result = new DataObject;
         $result->setPaymentFeeExclTax($fee)
             ->setPaymentFeeInclTax($fee + $taxAmount)
             ->setPaymentFeeTax($taxAmount)
             ->setRateRequest($request);
+        // @codingStandardsIgnoreEnd
 
         return $result;
     }
@@ -863,16 +952,10 @@ class Data extends AbstractHelper
      * Get Name Parser Instance
      * @see https://github.com/joshfraser/PHP-Name-Parser
      * @return \FullNameParser
-     * @throws LocalizedException
-     * @SuppressWarnings(MEQP2.Classes.ObjectInstantiation.FoundDirectInstantiation)
      */
     public function getNameParser()
     {
-        if (!class_exists('FullNameParser', false)) {
-            throw new LocalizedException(__('Missing PHP-Name-Parser library. Please install from https://github.com/joshfraser/PHP-Name-Parser'));
-        }
-
-        return new \FullNameParser();
+        return $this->nameParser;
     }
 
     /**
@@ -882,5 +965,69 @@ class Data extends AbstractHelper
     public function getMageVersion()
     {
         return $this->productMetadata->getVersion();
+    }
+
+    /**
+     * Set Order as Cancelled
+     * @see \Magento\Sales\Model\Order::registerCancellation()
+     * @param \Magento\Sales\Model\Order $order
+     * @param string                     $comment
+     */
+    public function cancelOrder(\Magento\Sales\Model\Order $order, $comment = '')
+    {
+        if ($order->canCancel()) {
+            $state = \Magento\Sales\Model\Order::STATE_CANCELED;
+
+            $order->setSubtotalCanceled($order->getSubtotal() - $order->getSubtotalInvoiced());
+            $order->setBaseSubtotalCanceled($order->getBaseSubtotal() - $order->getBaseSubtotalInvoiced());
+
+            $order->setTaxCanceled($order->getTaxAmount() - $order->getTaxInvoiced());
+            $order->setBaseTaxCanceled($order->getBaseTaxAmount() - $order->getBaseTaxInvoiced());
+
+            $order->setShippingCanceled($order->getShippingAmount() - $order->getShippingInvoiced());
+            $order->setBaseShippingCanceled($order->getBaseShippingAmount() - $order->getBaseShippingInvoiced());
+
+            $order->setDiscountCanceled(abs($order->getDiscountAmount()) - $order->getDiscountInvoiced());
+            $order->setBaseDiscountCanceled(abs($order->getBaseDiscountAmount()) - $order->getBaseDiscountInvoiced());
+
+            $order->setTotalCanceled($order->getGrandTotal() - $order->getTotalPaid());
+            $order->setBaseTotalCanceled($order->getBaseGrandTotal() - $order->getBaseTotalPaid());
+
+            $order->setState($state)
+                 ->setStatus($this->orderConfig->getStateDefaultStatus($state));
+            if (!empty($comment)) {
+                $order->addStatusHistoryComment($comment, false);
+            }
+
+            $order->save();
+        }
+    }
+
+    /**
+     * Get Quote By Id
+     * @param $quote_id
+     *
+     * @return mixed
+     */
+    public function getQuoteById($quote_id)
+    {
+        return $this->quoteFactory->create()->load($quote_id);
+    }
+
+    /**
+     * Make UUIDv5
+     * @param string $name
+     *
+     * @return bool|string
+     */
+    public function uuid($name)
+    {
+        try {
+            $uuid5 = Uuid::uuid5(Uuid::NAMESPACE_OID, $name);
+            return $uuid5->toString();
+        } catch (UnsatisfiedDependencyException $e) {
+            $this->_logger->critical($e);
+            return false;
+        }
     }
 }
