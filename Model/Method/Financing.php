@@ -211,11 +211,16 @@ class Financing extends \PayEx\Payments\Model\Method\AbstractMethod
         // Get SSN
         $ssn = $info->getAdditionalInformation('social_security_number');
 
+	    // Get msisdn
+	    $phone = $order->getBillingAddress()->getTelephone();
+	    $countryCode = $order->getBillingAddress()->getCountryId();
+	    $msisdn = $this->payexHelper->getMsisdn($phone, $countryCode);
+
         // Call PxOrder.Initialize8
         $params = [
             'accountNumber' => '',
             'purchaseOperation' => $operation,
-            'price' => round($amount * 100),
+            'price' => bcmul(100, $amount),
             'priceArgList' => '',
             'currency' => $currency_code,
             'vat' => 0,
@@ -253,7 +258,7 @@ class Financing extends \PayEx\Payments\Model\Method\AbstractMethod
             'countryCode' => $order->getBillingAddress()->getCountryId(),
             'paymentMethod' => 'PXFINANCINGINVOICE' . $order->getBillingAddress()->getCountryId(),
             'email' => $order->getBillingAddress()->getEmail(),
-            'msisdn' => '+' . ltrim($order->getBillingAddress()->getTelephone(), '+'),
+            'msisdn' => $msisdn,
             'ipAddress' => $this->payexHelper->getRemoteAddr()
         ];
         $result = $this->payexHelper->getPx()->PurchaseFinancingInvoice($params);
@@ -439,7 +444,7 @@ class Financing extends \PayEx\Payments\Model\Method\AbstractMethod
         $params = [
             'accountNumber' => '',
             'transactionNumber' => $transactionNumber,
-            'amount' => round(100 * $amount),
+            'amount' => bcmul(100, $amount),
             'orderId' => $order_id,
             'vatAmount' => 0,
             'additionalValues' => $additional

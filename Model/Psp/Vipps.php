@@ -86,7 +86,11 @@ class Vipps extends \PayEx\Payments\Model\Psp\Cc
 
         $currency = $order->getOrderCurrencyCode();
         $amount = $order->getGrandTotal();
-        $phone = $order->getBillingAddress()->getTelephone();
+
+        // Get msisdn
+	    $phone = $order->getBillingAddress()->getTelephone();
+        $countryCode = $order->getBillingAddress()->getCountryId();
+	    $msisdn = $this->payexHelper->getMsisdn($phone, $countryCode);
 
         try {
             $params = [
@@ -122,7 +126,7 @@ class Vipps extends \PayEx\Payments\Model\Psp\Cc
                         'payeeReference' => $order->getPayexOrderUuid(),
                     ],
                     'prefillInfo' => [
-                        'msisdn' => '+' . ltrim($phone, '+')
+                        'msisdn' => $msisdn
                     ]
                 ]
             ];

@@ -105,7 +105,7 @@ class Swish extends \PayEx\Payments\Model\Method\Cc
         $params = [
             'accountNumber' => '',
             'purchaseOperation' => 'SALE',
-            'price' => round($amount * 100),
+            'price' => bcmul(100, $amount),
             'priceArgList' => '',
             'currency' => $currency_code,
             'vat' => 0,

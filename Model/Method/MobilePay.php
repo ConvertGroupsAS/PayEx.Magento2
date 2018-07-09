@@ -96,7 +96,7 @@ class MobilePay extends \PayEx\Payments\Model\Method\Cc
         $params = [
             'accountNumber' => '',
             'purchaseOperation' => $operation,
-            'price' => round($amount * 100),
+            'price' => bcmul(100, $amount),
             'priceArgList' => '',
             'currency' => $currency_code,
             'vat' => 0,

@@ -96,6 +96,7 @@ abstract class AbstractInfo extends \Magento\Payment\Block\Info
                         }
                     }
                 }
+
                 return $result;
             }
         }

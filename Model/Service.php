@@ -126,11 +126,19 @@ class Service implements ServiceInterface
      */
     public function get_service_terms($payment_method)
     {
+        // Get content
+        $content = $this->scopeConfig->getValue(
+            'payment/' . $payment_method .'/content_tos',
+            ScopeInterface::SCOPE_STORE,
+            $this->storeManager->getStore()
+        );
+
         try {
             $block = $this->layout->createBlock('Magento\Framework\View\Element\Template');
             $block->setData('area', 'frontend')
-                  ->setTemplate('PayEx_Payments::checkout/terms_of_service.phtml')
-                  ->setData('method', $payment_method);
+                ->assign('method', $payment_method)
+                ->assign('content', $content)
+                ->setTemplate('PayEx_Payments::checkout/terms_of_service.phtml');
 
             return $block->toHtml();
         } catch (\Exception $e) {
@@ -222,6 +230,8 @@ class Service implements ServiceInterface
 
             // Save data in Session
             $this->checkoutHelper->getCheckout()->setPayexSSN($ssn);
+            $this->checkoutHelper->getCheckout()->setPayexPostalCode($postcode);
+            $this->checkoutHelper->getCheckout()->setPayexCountryCode($country_code);
             $this->checkoutHelper->getCheckout()->setPayexSSNData($data);
 
             return json_encode($data, true);

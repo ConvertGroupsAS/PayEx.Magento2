@@ -86,11 +86,16 @@ class PartPayment extends \PayEx\Payments\Model\Method\Financing
         // Get SSN
         $ssn = $info->getAdditionalInformation('social_security_number');
 
+	    // Get msisdn
+	    $phone = $order->getBillingAddress()->getTelephone();
+	    $countryCode = $order->getBillingAddress()->getCountryId();
+	    $msisdn = $this->payexHelper->getMsisdn($phone, $countryCode);
+
         // Call PxOrder.Initialize8
         $params = [
             'accountNumber' => '',
             'purchaseOperation' => 'AUTHORIZATION',
-            'price' => round($amount * 100),
+            'price' => bcmul(100, $amount),
             'priceArgList' => '',
             'currency' => $currency_code,
             'vat' => 0,
@@ -128,7 +133,7 @@ class PartPayment extends \PayEx\Payments\Model\Method\Financing
             'countryCode' => $order->getBillingAddress()->getCountryId(),
             'paymentMethod' => 'PXCREDITACCOUNT' . $order->getBillingAddress()->getCountryId(),
             'email' => $order->getBillingAddress()->getEmail(),
-            'msisdn' => '+' . ltrim($order->getBillingAddress()->getTelephone(), '+'),
+            'msisdn' => $msisdn,
             'ipAddress' => $this->payexHelper->getRemoteAddr()
         ];
         $result = $this->payexHelper->getPx()->PurchaseCreditAccount($params);

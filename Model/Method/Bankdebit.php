@@ -163,7 +163,7 @@ class Bankdebit extends \PayEx\Payments\Model\Method\AbstractMethod
             'accountNumber' => '',
             'purchaseOperation' => 'SALE',
             'price' => 0,
-            'priceArgList' => $bank_id . '=' . round($amount * 100),
+            'priceArgList' => $bank_id . '=' . bcmul(100, $amount),
             'currency' => $currency_code,
             'vat' => 0,
             'orderID' => $order_id,
