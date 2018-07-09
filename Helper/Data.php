@@ -1023,8 +1023,8 @@ class Data extends AbstractHelper
     public function uuid($name)
     {
         try {
-            $uuid5 = Uuid::uuid5(Uuid::NAMESPACE_OID, $name);
-            return $uuid5->toString();
+            $uuid5 = Uuid::uuid5(Uuid::NAMESPACE_OID, $name)->toString();
+            return substr(str_replace('-', '', $uuid5), 1, 30);
         } catch (UnsatisfiedDependencyException $e) {
             $this->_logger->critical($e);
             return false;
