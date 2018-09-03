@@ -15,6 +15,8 @@ class Vipps extends \PayEx\Payments\Model\Psp\Cc
 {
     const METHOD_CODE = 'payex_psp_vipps';
 
+    const PHONE_REGEXP = '/^(?:4[015-8]|5[89]|87|9\d)\d{6}$/';
+
     /**
      * Payment code
      *
@@ -87,11 +89,6 @@ class Vipps extends \PayEx\Payments\Model\Psp\Cc
         $currency = $order->getOrderCurrencyCode();
         $amount = $order->getGrandTotal();
 
-        // Get msisdn
-	    $phone = $order->getBillingAddress()->getTelephone();
-        $countryCode = $order->getBillingAddress()->getCountryId();
-	    $msisdn = $this->payexHelper->getMsisdn($phone, $countryCode);
-
         try {
             $params = [
                 'payment' => [
@@ -124,12 +121,19 @@ class Vipps extends \PayEx\Payments\Model\Psp\Cc
                     'payeeInfo' => [
                         'payeeId' => $this->getConfigData('payee_id'),
                         'payeeReference' => $order->getPayexOrderUuid(),
-                    ],
-                    'prefillInfo' => [
-                        'msisdn' => $msisdn
                     ]
                 ]
             ];
+            // Get msisdn
+            $phone = $order->getBillingAddress()->getTelephone();
+            if ($this->isPhoneValidForVipps($phone)) {
+                $countryCode = $order->getBillingAddress()->getCountryId();
+                $msisdn = $this->payexHelper->getMsisdn($phone, $countryCode);
+                $params['payment']['prefillInfo'] = [
+                    'msisdn' => $msisdn
+                ];
+            }
+
 
             $result = $this->psp->request('POST', '/psp/vipps/payments', $params);
         } catch (\Exception $e) {
@@ -177,5 +181,10 @@ class Vipps extends \PayEx\Payments\Model\Psp\Cc
         }
 
         return $this;
+    }
+
+    protected function isPhoneValidForVipps($phone)
+    {
+        return (bool) preg_match(self::PHONE_REGEXP, $phone, $matches);
     }
 }
