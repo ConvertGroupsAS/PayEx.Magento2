@@ -12,11 +12,12 @@ var config = {
                 'PayEx_Payments/js/model/error-processor-mixin': true
             }
         }
-    },
-    map: {
-        '*': {
-            'Magento_Checkout/js/action/select-payment-method':
-                'PayEx_Payments/js/action/select-payment-method'
-        }
     }
+    // Saving payment method at backend leaded to problems with messed payment methods (Payever & Payex)
+    // map: {
+    //     '*': {
+    //         'Magento_Checkout/js/action/select-payment-method':
+    //             'PayEx_Payments/js/action/select-payment-method'
+    //     }
+    // }
 };
