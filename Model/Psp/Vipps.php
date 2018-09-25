@@ -102,7 +102,7 @@ class Vipps extends \PayEx\Payments\Model\Psp\Cc
                             'vatAmount' => '0'
                         ]
                     ],
-                    'description' => __('Order #%1', $order->getIncrementId()),
+                    'description' => $this->getDescription($order),
                     'payerReference' => $customer_uuid,
                     'userAgent' => $this->request->getServer('HTTP_USER_AGENT'),
                     'language' => $this->getConfigData('culture'),
@@ -142,6 +142,7 @@ class Vipps extends \PayEx\Payments\Model\Psp\Cc
 
         // Save payment ID
         $info->setAdditionalInformation('payex_payment_id', $result['payment']['id']);
+        $order->setCanSendNewEmailFlag(false);
 
         switch ($this->getConfigData('checkout_method')) {
             case CheckoutMethod::METHOD_REDIRECT:
@@ -163,7 +164,7 @@ class Vipps extends \PayEx\Payments\Model\Psp\Cc
                         ]
                     ];
 
-                    $result = $this->psp->request('POST', $authorization, $params);
+                    $this->psp->request('POST', $authorization, $params);
                 } catch ( \Exception $e ) {
                     throw new LocalizedException(__($e->getMessage()));
                 }
@@ -177,12 +178,29 @@ class Vipps extends \PayEx\Payments\Model\Psp\Cc
 
                 break;
             default:
-                //
+                break;
         }
 
         return $this;
     }
 
+    /**
+     * Get description that will be displayed at VIPPS page
+     *
+     * @param Order $order
+     * @return \Magento\Framework\Phrase
+     */
+    public function getDescription(\Magento\Sales\Model\Order $order)
+    {
+        return __('Order #%1', $order->getIncrementId());
+    }
+
+    /**
+     * Check if phone is valid for VIPPS
+     *
+     * @param $phone
+     * @return bool
+     */
     protected function isPhoneValidForVipps($phone)
     {
         return (bool) preg_match(self::PHONE_REGEXP, $phone, $matches);
