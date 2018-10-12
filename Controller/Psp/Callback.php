@@ -174,8 +174,8 @@ class Callback extends Action
             }
 
             // Fetch transactions list
-            $result = $this->psp->request('GET', $payment_id . '/transactions');
-            $transactions = $result['transactions']['transactionList'];
+            $response = $this->psp->request('GET', $payment_id . '/transactions');
+            $transactions = $response['transactions']['transactionList'];
 
             // Import transactions
             $this->payexTransaction->import_transactions($transactions, $order_id);
@@ -190,7 +190,7 @@ class Callback extends Action
             // Check transaction state
             if ($transaction['state'] !== 'Completed') {
                 $reason = isset($transaction['failedReason']) ? $transaction['failedReason'] : __('Transaction failed.');
-                throw new \Exception(sprintf('Error: Transaction state %s. Reason: %s', $data['transaction']['state'], $reason));
+                throw new \Exception(sprintf('Error: Transaction state %s. Reason: %s', $transaction['state'], $reason));
             }
 
             // Check Transaction is already registered

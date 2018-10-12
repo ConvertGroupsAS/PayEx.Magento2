@@ -111,7 +111,7 @@ class Success extends Action
         if (!$order->getId()) {
             $this->checkoutHelper->getCheckout()->restoreQuote();
             $this->messageManager->addError(__('No order for processing found'));
-            $this->_redirect('checkout/cart');
+            $this->_redirect('checkout');
             return;
         }
 
@@ -125,7 +125,7 @@ class Success extends Action
         if (empty($payment_id)) {
             $this->checkoutHelper->getCheckout()->restoreQuote();
             $this->messageManager->addError(__('Unable to get payment Id'));
-            $this->_redirect('checkout/cart');
+            $this->_redirect('checkout');
             return;
         }
 
@@ -153,8 +153,7 @@ class Success extends Action
             // Restore the quote
             $this->checkoutHelper->getCheckout()->restoreQuote();
 
-            $this->messageManager->addError($message);
-            $this->_redirect('checkout/cart');
+            $this->_redirect('checkout');
         }
 
         // Fetch transactions list
@@ -197,17 +196,9 @@ class Success extends Action
             /** @var \Magento\Sales\Model\Order\Status $status */
             $status = $this->payexHelper->getAssignedState($new_status);
             $order->setData('state', $status->getState());
-            $order->setStatus($status->getStatus());
+            $order->addStatusHistoryComment(__('Payment has been authorized'), $status->getStatus());
             $order->save();
 
-            $order->addStatusHistoryComment(__('Payment has been authorized'));
-
-            // Send order notification
-            try {
-                $this->orderSender->send($order);
-            } catch (\Exception $e) {
-                $this->logger->critical($e);
-            }
 
             // Redirect to Success page
             $this->checkoutHelper->getCheckout()->getQuote()->setIsActive(false)->save();
@@ -221,7 +212,7 @@ class Success extends Action
             $this->checkoutHelper->getCheckout()->restoreQuote();
 
             $this->messageManager->addError($message);
-            $this->_redirect('checkout/cart');
+            $this->_redirect('checkout');
         } else {
             // Pending?
             // Redirect to Success page
