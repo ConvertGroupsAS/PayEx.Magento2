@@ -200,7 +200,13 @@ class Callback extends Action
                 $order->getId()
             );
             if ($trans) {
-                throw new \Exception(sprintf('Action of Transaction #%s already performed', $data['transaction']['number']));
+//                throw new \Exception(sprintf('Action of Transaction #%s already performed', $data['transaction']['number']));
+                //when you cancel the order and create new one, success callback happens before this and trans exists
+                //so this is ok case
+                $result->setStatusHeader('200', '1.1', 'OK');
+                $result->setContents('OK');
+
+                return $result;
             }
 
             // Apply action

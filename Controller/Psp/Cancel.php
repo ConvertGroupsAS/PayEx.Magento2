@@ -71,8 +71,7 @@ class Cancel extends Action
 
         // Restore the quote
         $this->checkoutHelper->getCheckout()->restoreQuote();
-        $this->messageManager->addError($message);
-        $this->_redirect('checkout/cart');
+        $this->_redirect('checkout');
     }
 
     /**

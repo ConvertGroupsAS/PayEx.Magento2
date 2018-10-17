@@ -187,6 +187,13 @@ class Success extends Action
 
                 // Set Last Transaction ID
                 $order->getPayment()->setLastTransId($transaction['number'])->save();
+
+                // Send order notification
+                try {
+                    $this->orderSender->send($order);
+                } catch (\Exception $e) {
+                    $this->logger->critical($e);
+                }
             }
 
             // Payment authorized
@@ -206,12 +213,8 @@ class Success extends Action
         } elseif ($transaction = $this->psp->filter($transactions, ['state' => 'Failed'])) {
             // @todo Cancel Order ?
             // @todo Extract failed reason
-            $message = __('Payment failed');
-
             // Restore the quote
             $this->checkoutHelper->getCheckout()->restoreQuote();
-
-            $this->messageManager->addError($message);
             $this->_redirect('checkout');
         } else {
             // Pending?
