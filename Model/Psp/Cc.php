@@ -41,7 +41,7 @@ class Cc extends \PayEx\Payments\Model\Psp\AbstractPsp
     protected $_canRefundInvoicePartial = true;
     protected $_isGateway = true;
     protected $_isInitializeNeeded = true;
-    protected $_canVoid = false;
+    protected $_canVoid = true;
     protected $_canUseInternal = false;
     protected $_canFetchTransactionInfo = true;
 

@@ -43,7 +43,7 @@ class Vipps extends \PayEx\Payments\Model\Psp\Cc
     protected $_canRefundInvoicePartial = true;
     protected $_isGateway = true;
     protected $_isInitializeNeeded = true;
-    protected $_canVoid = false;
+    protected $_canVoid = true;
     protected $_canUseInternal = false;
     protected $_canFetchTransactionInfo = true;
 
