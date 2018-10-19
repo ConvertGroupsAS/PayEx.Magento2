@@ -1040,24 +1040,15 @@ class Data extends AbstractHelper
 	 */
     public function getMsisdn($phone, $countryCode)
     {
-	    $msisdn = ltrim($phone, '+');
 	    switch ($countryCode) {
 		    case 'SE':
-			    if (strpos($msisdn, '46') === 0) {
-				    $msisdn = substr($msisdn, 2);
-			    }
-			    $msisdn = ltrim($msisdn, '0');
-			    $msisdn = '+46' . $msisdn;
+			    $msisdn = '+46' . $phone;
 			    break;
 		    case 'NO':
-			    if (strpos($msisdn, '47') === 0) {
-				    $msisdn = substr($msisdn, 2);
-			    }
-			    $msisdn = ltrim($msisdn, '0');
-			    $msisdn = '+47' . $msisdn;
+			    $msisdn = '+47' . $phone;
 			    break;
 		    default:
-			    $msisdn = '+' . $msisdn;
+			    $msisdn = '+' . $phone;
 			    break;
 	    }
 
