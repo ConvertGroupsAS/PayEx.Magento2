@@ -317,12 +317,12 @@ class Cc extends \PayEx\Payments\Model\Psp\AbstractPsp
 
         $amount = round($amount, 2, PHP_ROUND_HALF_DOWN);
 
-        if (!$payment->getLastTransId()) {
+        if (!$payment->getRefundTransactionId()) {
             throw new LocalizedException(__('Invalid transaction ID.'));
         }
 
         // Load transaction Data
-        $transactionId = $payment->getLastTransId();
+        $transactionId = $payment->getRefundTransactionId();
 
         /** @var Transaction $transaction */
         $transaction = $this->transactionRepository->getByTransactionId(

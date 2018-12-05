@@ -286,12 +286,12 @@ abstract class AbstractMethod extends \Magento\Payment\Model\Method\AbstractMeth
             throw new LocalizedException(__('Invalid amount for refund.'));
         }
 
-        if (!$payment->getLastTransId()) {
+        if (!$payment->getRefundTransactionId()) {
             throw new LocalizedException(__('Invalid transaction ID.'));
         }
 
         // Load transaction Data
-        $transactionId = $payment->getLastTransId();
+        $transactionId = $payment->getRefundTransactionId();
 
         /** @var Transaction $transaction */
         $transaction = $this->transactionRepository->getByTransactionId(
