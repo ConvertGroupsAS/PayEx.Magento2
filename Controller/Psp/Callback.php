@@ -241,8 +241,11 @@ class Callback extends Action
                     $order->setData('state', $status->getState());
                     $order->setStatus($status->getStatus());
                     $order->save();
-
                     $order->addStatusHistoryComment(__('Payment has been authorized'));
+
+                    $this->_eventManager->dispatch('payex_psp_payment_authorized', [
+                        'order' => $order
+                    ]);
 
                     // Send order notification
                     try {
