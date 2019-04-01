@@ -206,6 +206,9 @@ class Success extends Action
             $order->addStatusHistoryComment(__('Payment has been authorized'), $status->getStatus());
             $order->save();
 
+            $this->_eventManager->dispatch('payex_psp_payment_authorized', [
+                'order' => $order
+            ]);
 
             // Redirect to Success page
             $this->checkoutHelper->getCheckout()->getQuote()->setIsActive(false)->save();
