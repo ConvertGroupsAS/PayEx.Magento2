@@ -35,7 +35,7 @@ class Cc extends \PayEx\Payments\Model\Psp\AbstractPsp
      */
     protected $_canAuthorize = true;
     protected $_canCapture = true;
-    protected $_canCapturePartial = false;
+    protected $_canCapturePartial = true;
     protected $_canCaptureOnce = true;
     protected $_canRefund = true;
     protected $_canRefundInvoicePartial = true;
