@@ -135,7 +135,7 @@ class Callback extends Action
 
         $order_id = $this->getRequest()->getParam('order_id');
         if (empty($order_id)) {
-            $result->setStatusHeader('400', '1.1', 'Error');
+            $result->setHttpResponseCode('200');
             $result->setContents('Order Id required');
 
             return $result;
@@ -326,7 +326,7 @@ class Callback extends Action
         } catch (\Exception $e) {
             $logger->crit(sprintf('IPN: %s', $e->getMessage()));
 
-            $result->setStatusHeader('400', '1.1', sprintf('IPN: %s', $e->getMessage()));
+            $result->setHttpResponseCode('200');
             $result->setContents(sprintf('IPN: %s', $e->getMessage()));
 
             return $result;
