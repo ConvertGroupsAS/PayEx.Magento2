@@ -68,6 +68,7 @@ class Vipps extends \PayEx\Payments\Model\Psp\Cc
 
         /** @var \Magento\Sales\Model\Order $order */
         $order = $info->getOrder();
+        $order->setCanSendNewEmailFlag(false);
 
         // Set state object
         /** @var \Magento\Sales\Model\Order\Status $status */
@@ -98,7 +99,7 @@ class Vipps extends \PayEx\Payments\Model\Psp\Cc
                     'prices' => [
                         [
                             'type' => 'Vipps',
-                            'amount' => round($amount * 100),
+                            'amount' => bcmul(100, $amount),
                             'vatAmount' => '0'
                         ]
                     ],
@@ -165,7 +166,7 @@ class Vipps extends \PayEx\Payments\Model\Psp\Cc
                     ];
 
                     $this->psp->request('POST', $authorization, $params);
-                } catch ( \Exception $e ) {
+                } catch (\Exception $e) {
                     throw new LocalizedException(__($e->getMessage()));
                 }
 

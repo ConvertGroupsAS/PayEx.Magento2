@@ -186,7 +186,7 @@ class Checkout extends \PayEx\Payments\Model\Psp\AbstractPsp
 
             $params = [
                 'transaction' => [
-                    'amount'      => (int)round($amount * 100),
+	                'amount'      => number_format($amount, 2, '.', ''),
                     'vatAmount'   => 0,
                     'description' => sprintf('Capture for Order #%s', $order->getIncrementId())
                 ]
@@ -342,7 +342,7 @@ class Checkout extends \PayEx\Payments\Model\Psp\AbstractPsp
 
             $params = [
                 'transaction' => [
-                    'amount'      => (int)round($amount * 100),
+                    'amount'      => number_format($amount, 2, '.', ''),
                     'vatAmount'   => 0,
                     'description' => sprintf('Refund for Order #%s', $order->getIncrementId())
                 ]

@@ -50,7 +50,8 @@ class Fee extends Template
         // Check is fee allowed for payment method
         if (!in_array($invoice->getOrder()->getPayment()->getMethod(), [
             Financing::METHOD_CODE,
-            PartPayment::METHOD_CODE
+            PartPayment::METHOD_CODE,
+            \PayEx\Payments\Model\Psp\Invoice::METHOD_CODE
         ])) {
             return $this;
         }
@@ -62,6 +63,7 @@ class Fee extends Template
                         'code' => 'payex_payment_fee_with_tax',
                         'strong' => false,
                         'value' => $invoice->getPayexPaymentFee() + $invoice->getPayexPaymentFeeTax(),
+                        'base_value' => $invoice->getBasePayexPaymentFee() + $invoice->getBasePayexPaymentFeeTax(),
                         'label' => __('Payment Fee') . ' ' . __('(Incl.Tax)'),
                     ]),
                     'grand_total'
@@ -72,6 +74,7 @@ class Fee extends Template
                         'code' => 'payex_payment_fee',
                         'strong' => false,
                         'value' => $invoice->getPayexPaymentFee(),
+                        'base_value' => $invoice->getBasePayexPaymentFee(),
                         'label' => __('Payment Fee') . ' ' . __('(Excl.Tax)'),
                     ]),
                     'payex_payment_fee_with_tax'
@@ -82,6 +85,7 @@ class Fee extends Template
                         'code' => 'payex_payment_fee_with_tax',
                         'strong' => false,
                         'value' => $invoice->getPayexPaymentFee() + $invoice->getPayexPaymentFeeTax(),
+                        'base_value' => $invoice->getBasePayexPaymentFee() + $invoice->getBasePayexPaymentFeeTax(),
                         'label' => __('Payment Fee') . ' ' . __('(Incl.Tax)'),
                     ]),
                     'grand_total'
@@ -92,6 +96,7 @@ class Fee extends Template
                         'code' => 'payex_payment_fee',
                         'strong' => false,
                         'value' => $invoice->getPayexPaymentFee(),
+                        'base_value' => $invoice->getBasePayexPaymentFee(),
                         'label' => __('Payment Fee') . ' ' . __('(Excl.Tax)'),
                     ]),
                     'grand_total'

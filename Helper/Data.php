@@ -373,23 +373,52 @@ class Data extends AbstractHelper
     }
 
     /**
+     * Get Rounded allowed VAT rate
+     * Workaround "The VatPercent field must contain a supported percent value" problem
+     * @param $rate
+     * @return mixed
+     */
+    public static function getStrictVAT($rate) {
+        $rate = (float) $rate;
+        $allowed = [0, 6, 8, 10, 12, 14, 15, 22, 24, 25];
+        if (in_array($rate, $allowed)) {
+            return $rate;
+        }
+
+        $values = [];
+        $values[] = ceil($rate);
+        $values[] = intval($rate);
+        $values[] = floor($rate);
+
+        foreach ($values as $value) {
+            if (in_array($value, $allowed)) {
+                return $value;
+            }
+        }
+
+        // @todo Check it?
+        return $rate;
+    }
+
+    /**
      * Get Order Items
      * @param \Magento\Sales\Model\Order $order
      * @param string $currency Order Currency
+     * @param bool $strict_vat_rate Strict VAT
      * @return array
      */
-    public function getOrderItems(\Magento\Sales\Model\Order $order, $currency = '')
+    public function getOrderItems(\Magento\Sales\Model\Order $order, $currency = '', $strict_vat_rate = false)
     {
-        if (empty($currency)) {
-            $currency = $order->getBaseCurrencyCode();
-        }
+        //if (empty($currency)) {
+            //$currency = $order->getBaseCurrencyCode();
+        //}
 
         // Currency rate
         $currencyRate = 1;
-        if ($order->getBaseCurrencyCode() != $currency) {
+        //if ($order->getBaseCurrencyCode() != $currency) {
             // @todo Currency rate calc
-            $currencyRate = $order->getBaseToOrderRate();
-        }
+            //$currencyRate = $order->getBaseToOrderRate();
+        //}
 
         $lines = [];
         $items = $order->getAllVisibleItems();
@@ -406,6 +435,9 @@ class Data extends AbstractHelper
             $priceWithTax = $item->getRowTotalInclTax() * $currencyRate;
             $priceWithoutTax = $item->getRowTotal() * $currencyRate;
             $taxPercent = $priceWithoutTax > 0 ? (($priceWithTax / $priceWithoutTax) - 1) * 100 : 0;
+            if ($strict_vat_rate) {
+                $taxPercent = self::getStrictVAT($taxPercent);
+            }
             $taxPrice = $priceWithTax - $priceWithoutTax;
 
             $lines[] = [
@@ -430,6 +462,10 @@ class Data extends AbstractHelper
                 $shippingTaxRate = (($shippingIncTax / $shippingExclTax) - 1) * 100;
             } else {
                 $shippingTaxRate = 0;
+            }
+
+            if ($strict_vat_rate) {
+                $shippingTaxRate = self::getStrictVAT($shippingTaxRate);
             }
 
             $lines[] = [
@@ -459,6 +495,9 @@ class Data extends AbstractHelper
             $discountExclTax = $discountData->getDiscountExclTax() * $currencyRate;
             $discountVatAmount = $discountInclTax - $discountExclTax;
             $discountVatPercent = $discountExclTax > 0 ? (($discountInclTax / $discountExclTax) - 1) * 100 : 0;
+            if ($strict_vat_rate) {
+                $discountVatPercent = self::getStrictVAT($discountVatPercent);
+            }
 
             $lines[] = [
                 'type' => 'discount',
@@ -475,17 +514,21 @@ class Data extends AbstractHelper
         if ($order->getPayexPaymentFee() > 0 &&
             in_array($order->getPayment()->getMethod(), [
                 \PayEx\Payments\Model\Method\Financing::METHOD_CODE,
-                \PayEx\Payments\Model\Method\PartPayment::METHOD_CODE
+                \PayEx\Payments\Model\Method\PartPayment::METHOD_CODE,
+                \PayEx\Payments\Model\Psp\Invoice::METHOD_CODE
             ])
         ) {
             $feeExclTax = $order->getPayexPaymentFee() * $currencyRate;
             $feeTax = $order->getPayexPaymentFeeTax() * $currencyRate;
             $feeIncTax = $feeExclTax + $feeTax;
             $feeTaxRate = $feeExclTax > 0 ? (($feeIncTax / $feeExclTax) - 1) * 100 : 0;
+            if ($strict_vat_rate) {
+                $feeTaxRate = self::getStrictVAT($feeTaxRate);
+            }
 
             $lines[] = [
                 'type' => 'fee',
-                'name' => __('Payment Fee'),
+                'name' => (string) __('Payment Fee'),
                 'qty' => 1,
                 'price_with_tax' => sprintf("%.2f", $feeIncTax),
                 'price_without_tax' => sprintf("%.2f", $feeExclTax),
@@ -1031,13 +1074,13 @@ class Data extends AbstractHelper
         }
     }
 
-	/**
-	 * Get MSISDN
-	 * @param string $phone
-	 * @param string $countryCode
-	 *
-	 * @return string
-	 */
+    /**
+     * Get MSISDN
+     * @param string $phone
+     * @param string $countryCode
+     *
+     * @return string
+     */
     public function getMsisdn($phone, $countryCode)
     {
 	    switch ($countryCode) {

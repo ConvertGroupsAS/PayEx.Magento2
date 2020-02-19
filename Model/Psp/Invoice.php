@@ -251,7 +251,7 @@ class Invoice extends \PayEx\Payments\Model\Psp\AbstractPsp
                 ],
                 'legalAddress' => [
                     'addressee' => $legal_address['addressee'],
-                    'coAddress' => $legal_address['coAddress'],
+                    'coAddress' => isset($legal_address['coAddress']) ? $legal_address['coAddress'] : '',
                     'streetAddress' => $legal_address['streetAddress'],
                     'zipCode' => $legal_address['zipCode'],
                     'city' => $legal_address['city'],
@@ -302,30 +302,30 @@ class Invoice extends \PayEx\Payments\Model\Psp\AbstractPsp
 
         // Get Items
         $descriptions = [];
-        $items = $this->payexHelper->getOrderItems($order, $order->getOrderCurrencyCode());
+        $items = $this->payexHelper->getOrderItems($order, $order->getOrderCurrencyCode(), true);
         foreach ($items as $item) {
             $unit_price     = sprintf("%.2f", $item['price_without_tax'] / $item['qty']);
             $descriptions[] = [
                 'product' => $item['name'],
                 'quantity' => $item['qty'],
-                'unitPrice' => (int) round($unit_price * 100),
-                'amount' => (int) round( $item['price_with_tax'] * 100),
-                'vatAmount' => (int) round( $item['tax_price'] * 100),
-                'vatPercent' => sprintf( "%.2f", $item['tax_percent'] ),
+                'unitPrice' => bcmul(100, $unit_price),
+                'amount' => bcmul(100, $item['price_with_tax']),
+                'vatAmount' => bcmul(100, $item['tax_price']),
+                'vatPercent' => sprintf("%.2f", $item['tax_percent']),
             ];
-        }
+        };
 
         try {
             $result = $this->psp->request('GET', $payment_id);
             $capture_href = $this->psp->get_operation($result['operations'], 'create-capture');
             if (empty($capture_href)) {
-                throw new LocalizedException(__( 'Capture unavailable.'));
+                throw new LocalizedException(__('Capture unavailable.'));
             }
 
             $params = [
                 'transaction' => [
                     'activity' => 'FinancingConsumer',
-                    'amount' => (int) round($amount * 100),
+                    'amount' => bcmul(100, $amount),
                     'vatAmount' => 0,
                     'description' => sprintf('Capture for Order #%s', $order->getIncrementId()),
                     'payeeReference' => str_replace('-', '', $this->payexHelper->uuid(uniqid($order->getIncrementId())))
@@ -334,7 +334,7 @@ class Invoice extends \PayEx\Payments\Model\Psp\AbstractPsp
             ];
             $result = $this->psp->request('POST', $capture_href, $params);
         } catch (\Exception $e) {
-            throw new LocalizedException(__( 'Error: %1', $e->getMessage()));
+            throw new LocalizedException(__('Error: %1', $e->getMessage()));
         }
 
         // Save transaction
@@ -385,7 +385,7 @@ class Invoice extends \PayEx\Payments\Model\Psp\AbstractPsp
             $result = $this->psp->request('GET', $payment_id);
             $cancel_href = $this->psp->get_operation($result['operations'], 'create-cancellation');
             if (empty($cancel_href)) {
-                throw new LocalizedException(__( 'Cancel unavailable.'));
+                throw new LocalizedException(__('Cancel unavailable.'));
             }
 
             $params = [
@@ -397,7 +397,7 @@ class Invoice extends \PayEx\Payments\Model\Psp\AbstractPsp
             ];
             $result = $this->psp->request('POST', $cancel_href, $params);
         } catch (\Exception $e) {
-            throw new LocalizedException(__( 'Error: %1', $e->getMessage()));
+            throw new LocalizedException(__('Error: %1', $e->getMessage()));
         }
 
         // Save transaction
@@ -480,13 +480,13 @@ class Invoice extends \PayEx\Payments\Model\Psp\AbstractPsp
             $result = $this->psp->request('GET', $payment_id);
             $reversal_href = $this->psp->get_operation($result['operations'], 'create-reversal');
             if (empty($reversal_href)) {
-                throw new LocalizedException(__( 'Refund unavailable.'));
+                throw new LocalizedException(__('Refund unavailable.'));
             }
 
             $params = [
                 'transaction' => [
                     'activity' => 'FinancingConsumer',
-                    'amount' => (int) round($amount * 100),
+                    'amount' => bcmul(100, $amount),
                     'vatAmount' => 0,
                     'description' => sprintf('Refund for Order #%s', $order->getIncrementId()),
                     'payeeReference' => str_replace('-', '', $this->payexHelper->uuid(uniqid($order->getIncrementId())))
@@ -494,7 +494,7 @@ class Invoice extends \PayEx\Payments\Model\Psp\AbstractPsp
             ];
             $result = $this->psp->request('POST', $reversal_href, $params);
         } catch (\Exception $e) {
-            throw new LocalizedException(__( 'Error: %1', $e->getMessage()));
+            throw new LocalizedException(__('Error: %1', $e->getMessage()));
         }
 
         // Save transaction
@@ -524,6 +524,4 @@ class Invoice extends \PayEx\Payments\Model\Psp\AbstractPsp
                 throw new LocalizedException($message);
         }
     }
-
-
 }
