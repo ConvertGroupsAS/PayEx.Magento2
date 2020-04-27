@@ -82,7 +82,7 @@ class Success extends Action
         \Magento\Sales\Model\Order\Email\Sender\OrderSender $orderSender,
         \Magento\Sales\Model\OrderFactory $orderFactory
     ) {
-    
+
         parent::__construct($context);
 
         $this->logger = $logger;
@@ -208,6 +208,53 @@ class Success extends Action
             $this->_eventManager->dispatch('payex_psp_payment_authorized', [
                 'order' => $order
             ]);
+
+            // Check payment is authorized
+            $captureTransactions = $this->payexTransaction->select([
+                'order_id' => $order_id,
+                'type'     => 'Capture'
+            ]);
+
+            if ($captureTransaction = $this->psp->filter($captureTransactions, ['state' => 'Completed'])) {
+                $order->getPayment()->setTransactionId($captureTransaction['number']);
+                $trans = $order->getPayment()->addTransaction(Transaction::TYPE_CAPTURE, null, true);
+                $trans->setIsClosed(0);
+                $trans->setAdditionalInformation(Transaction::RAW_DETAILS, $captureTransaction);
+                $trans->save();
+
+                // Set Last Transaction ID
+                $order->getPayment()->setLastTransId($captureTransaction['number'])->save();
+
+                // Change order status
+                $new_status = $method->getConfigData('order_status_capture');
+
+                /** @var \Magento\Sales\Model\Order\Status $status */
+                $status = $this->payexHelper->getAssignedState($new_status);
+                $order->setData('state', $status->getState());
+                $order->setStatus($status->getStatus());
+                $order->save();
+
+                $order->addStatusHistoryComment(__('Payment has been captured'));
+
+                // Send order notification
+                try {
+                    $this->orderSender->send($order);
+                } catch (\Exception $e) {
+                    $this->logger->critical($e);
+                }
+
+                // Create Invoice
+                $invoice = $this->payexHelper->makeInvoice(
+                    $order,
+                    [],
+                    false
+                );
+                $invoice->setTransactionId($captureTransaction['number']);
+                $invoice->save();
+
+                $this->logger->info(sprintf('IPN: Order #%s marked as captured', $order_id));
+            }
+
             $order->save();
 
             // Redirect to Success page
