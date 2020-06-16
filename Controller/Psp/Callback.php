@@ -10,6 +10,11 @@ use Magento\Sales\Model\Order\Payment\Transaction;
 class Callback extends Action
 {
     /**
+     * Database lock timeout in seconds
+     */
+    const LOCK_TIMEOUT = 60;
+
+    /**
      * @var \Magento\Framework\Controller\Result\RawFactory
      */
     private $rawResultFactory;
@@ -65,6 +70,11 @@ class Callback extends Action
     protected $payexTransaction;
 
     /**
+     * @var \Magento\Framework\Lock\Backend\Database
+     */
+    protected $lockService;
+
+    /**
      * Callback constructor.
      *
      * @param \Magento\Framework\App\Action\Context             $context
@@ -77,6 +87,7 @@ class Callback extends Action
      * @param \PayEx\Payments\Model\PayexTransaction            $payexTransaction
      * @param \Magento\Sales\Api\TransactionRepositoryInterface $transactionRepository
      * @param \Magento\Sales\Model\OrderFactory                 $orderFactory
+     * @param \Magento\Framework\Lock\Backend\Database          $lockService
      */
     public function __construct(
         \Magento\Framework\App\Action\Context $context,
@@ -89,7 +100,8 @@ class Callback extends Action
         \PayEx\Payments\Model\PayexTransaction $payexTransaction,
         \Magento\Sales\Api\TransactionRepositoryInterface $transactionRepository,
         \Magento\Sales\Model\Order\Email\Sender\OrderSender $orderSender,
-        \Magento\Sales\Model\OrderFactory $orderFactory
+        \Magento\Sales\Model\OrderFactory $orderFactory,
+        \Magento\Framework\Lock\Backend\Database $lockService
     ) {
 
         parent::__construct($context);
@@ -103,9 +115,9 @@ class Callback extends Action
         $this->transactionRepository = $transactionRepository;
         $this->orderSender           = $orderSender;
         $this->orderFactory          = $orderFactory;
-
-        $this->psp              = $psp;
-        $this->payexTransaction = $payexTransaction;
+        $this->psp                   = $psp;
+        $this->payexTransaction      = $payexTransaction;
+        $this->lockService           = $lockService;
     }
 
     /**
@@ -144,6 +156,8 @@ class Callback extends Action
         $data = @json_decode($raw_body, true);
 
         try {
+            $this->lockService->lock($order_id, self::LOCK_TIMEOUT);
+
             if (!isset($data['payment']) || !isset($data['payment']['id'])) {
                 throw new \Exception('Error: Invalid payment value');
             }
@@ -199,13 +213,7 @@ class Callback extends Action
                 $order->getId()
             );
             if ($trans) {
-//                throw new \Exception(sprintf('Action of Transaction #%s already performed', $data['transaction']['number']));
-                //when you cancel the order and create new one, success callback happens before this and trans exists
-                //so this is ok case
-                $result->setStatusHeader('200', '1.1', 'OK');
-                $result->setContents('OK');
-
-                return $result;
+                throw new \Exception(sprintf('Action of Transaction #%s already performed', $transaction['number']));
             }
 
             // Apply action
@@ -286,13 +294,15 @@ class Callback extends Action
                     }
 
                     // Create Invoice
-                    $invoice = $this->payexHelper->makeInvoice(
-                        $order,
-                        [],
-                        false
-                    );
-                    $invoice->setTransactionId($transaction['number']);
-                    $invoice->save();
+                    if ($order->canInvoice()) {
+                        $invoice = $this->payexHelper->makeInvoice(
+                            $order,
+                            [],
+                            false
+                        );
+                        $invoice->setTransactionId($transaction['number']);
+                        $invoice->save();
+                    }
 
                     $logger->info(sprintf('IPN: Order #%s marked as captured', $order_id));
                     break;
@@ -322,17 +332,17 @@ class Callback extends Action
                 default:
                     throw new \Exception(sprintf('Error: Unknown type %s', $transaction['type']));
             }
+
+            $result->setStatusHeader('200', '1.1', 'OK');
+            $result->setContents('OK');
         } catch (\Exception $e) {
             $logger->crit(sprintf('IPN: %s', $e->getMessage()));
 
             $result->setHttpResponseCode('200');
             $result->setContents(sprintf('IPN: %s', $e->getMessage()));
-
-            return $result;
+        } finally {
+            $this->lockService->unlock($order_id);
         }
-
-        $result->setStatusHeader('200', '1.1', 'OK');
-        $result->setContents('OK');
 
         return $result;
     }

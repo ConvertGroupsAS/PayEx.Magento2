@@ -59,6 +59,11 @@ class Success extends Action
     protected $payexTransaction;
 
     /**
+     * @var \Magento\Framework\Lock\Backend\Database
+     */
+    protected $lockService;
+
+    /**
      * Success constructor.
      * @param \Psr\Log\LoggerInterface $logger
      * @param \Magento\Framework\App\Action\Context $context
@@ -69,6 +74,7 @@ class Success extends Action
      * @param \PayEx\Payments\Model\PayexTransaction $payexTransaction
      * @param \Magento\Sales\Api\TransactionRepositoryInterface $transactionRepository
      * @param \Magento\Sales\Model\OrderFactory $orderFactory
+     * @param \Magento\Framework\Lock\Backend\Database $lockService
      */
     public function __construct(
         \Magento\Framework\App\Action\Context $context,
@@ -80,7 +86,8 @@ class Success extends Action
         \PayEx\Payments\Model\PayexTransaction $payexTransaction,
         \Magento\Sales\Api\TransactionRepositoryInterface $transactionRepository,
         \Magento\Sales\Model\Order\Email\Sender\OrderSender $orderSender,
-        \Magento\Sales\Model\OrderFactory $orderFactory
+        \Magento\Sales\Model\OrderFactory $orderFactory,
+        \Magento\Framework\Lock\Backend\Database $lockService
     ) {
 
         parent::__construct($context);
@@ -93,16 +100,18 @@ class Success extends Action
         $this->transactionRepository = $transactionRepository;
         $this->orderSender = $orderSender;
         $this->orderFactory = $orderFactory;
-
         $this->psp = $psp;
         $this->payexTransaction = $payexTransaction;
+        $this->lockService = $lockService;
     }
+
 
     /**
      * Dispatch request
      *
-     * @return \Magento\Framework\Controller\ResultInterface|ResponseInterface
-     * @throws \Magento\Framework\Exception\NotFoundException
+     * @return \Magento\Framework\App\ResponseInterface|\Magento\Framework\Controller\ResultInterface|void
+     * @throws LocalizedException
+     * @throws \Magento\Framework\Exception\InputException
      */
     public function execute()
     {
@@ -155,123 +164,124 @@ class Success extends Action
 
             $this->_redirect('checkout');
         }
+        try {
+            $this->lockService->lock($order_id, Callback::LOCK_TIMEOUT);
+            // Fetch transactions list
+            $result = $this->psp->request('GET', $payment_id . '/transactions');
+            $transactions = $result['transactions']['transactionList'];
 
-        // Fetch transactions list
-        $result = $this->psp->request('GET', $payment_id . '/transactions');
-        $transactions = $result['transactions']['transactionList'];
-
-        // Import transactions
-        $this->payexTransaction->import_transactions($transactions, $order_id);
-
-        // Check payment is authorized
-        $transactions = $this->payexTransaction->select([
-            'order_id' => $order_id,
-            'type'     => 'Authorization'
-        ]);
-
-        if ($transaction = $this->psp->filter($transactions, ['state' => 'Completed'])) {
-            // Check Transaction is already registered
-            $trans = $this->transactionRepository->getByTransactionId(
-                $transaction['number'],
-                $order->getPayment()->getId(),
-                $order->getId()
-            );
-
-            // Register Transaction
-            if (!$trans) {
-                $order->getPayment()->setTransactionId($transaction['number']);
-                $trans = $order->getPayment()->addTransaction(Transaction::TYPE_AUTH, null, true);
-                $trans->setIsClosed(0);
-                $trans->setAdditionalInformation(Transaction::RAW_DETAILS, $transaction);
-                $trans->save();
-
-                // Set Last Transaction ID
-                $order->getPayment()->setLastTransId($transaction['number'])->save();
-
-                // Send order notification
-                try {
-                    $this->orderSender->send($order);
-                } catch (\Exception $e) {
-                    $this->logger->critical($e);
-                }
-            }
-
-            // Payment authorized
-            // Change order status
-            $new_status = $method->getConfigData('order_status_authorize');
-
-            /** @var \Magento\Sales\Model\Order\Status $status */
-            $status = $this->payexHelper->getAssignedState($new_status);
-            $order->setData('state', $status->getState());
-            $order->addStatusHistoryComment(__('Payment has been authorized'), $status->getStatus());
-
-            $this->_eventManager->dispatch('payex_psp_payment_authorized', [
-                'order' => $order
-            ]);
+            // Import transactions
+            $this->payexTransaction->import_transactions($transactions, $order_id);
 
             // Check payment is authorized
-            $captureTransactions = $this->payexTransaction->select([
+            $transactions = $this->payexTransaction->select([
                 'order_id' => $order_id,
-                'type'     => 'Capture'
+                'type'     => 'Authorization'
             ]);
 
-            if ($captureTransaction = $this->psp->filter($captureTransactions, ['state' => 'Completed'])) {
-                $order->getPayment()->setTransactionId($captureTransaction['number']);
-                $trans = $order->getPayment()->addTransaction(Transaction::TYPE_CAPTURE, null, true);
-                $trans->setIsClosed(0);
-                $trans->setAdditionalInformation(Transaction::RAW_DETAILS, $captureTransaction);
-                $trans->save();
+            if ($transaction = $this->psp->filter($transactions, ['state' => 'Completed'])) {
+                // Check Transaction is already registered
+                $trans = $this->transactionRepository->getByTransactionId(
+                    $transaction['number'],
+                    $order->getPayment()->getId(),
+                    $order->getId()
+                );
 
-                // Set Last Transaction ID
-                $order->getPayment()->setLastTransId($captureTransaction['number'])->save();
+                // Register Transaction
+                if (!$trans) {
+                    $order->getPayment()->setTransactionId($transaction['number']);
+                    $trans = $order->getPayment()->addTransaction(Transaction::TYPE_AUTH, null, true);
+                    $trans->setIsClosed(0);
+                    $trans->setAdditionalInformation(Transaction::RAW_DETAILS, $transaction);
+                    $trans->save();
 
+                    // Set Last Transaction ID
+                    $order->getPayment()->setLastTransId($transaction['number'])->save();
+
+                    // Send order notification
+                    $this->orderSender->send($order);
+                }
+
+                // Payment authorized
                 // Change order status
-                $new_status = $method->getConfigData('order_status_capture');
+                $new_status = $method->getConfigData('order_status_authorize');
 
                 /** @var \Magento\Sales\Model\Order\Status $status */
                 $status = $this->payexHelper->getAssignedState($new_status);
                 $order->setData('state', $status->getState());
-                $order->setStatus($status->getStatus());
-                $order->save();
+                $order->addStatusHistoryComment(__('Payment has been authorized'), $status->getStatus());
 
-                $order->addStatusHistoryComment(__('Payment has been captured'));
+                $this->_eventManager->dispatch('payex_psp_payment_authorized', [
+                    'order' => $order
+                ]);
 
-                // Send order notification
-                try {
+                // Check payment is authorized
+                $captureTransactions = $this->payexTransaction->select([
+                    'order_id' => $order_id,
+                    'type'     => 'Capture'
+                ]);
+
+                if ($captureTransaction = $this->psp->filter($captureTransactions, ['state' => 'Completed'])) {
+                    $order->getPayment()->setTransactionId($captureTransaction['number']);
+                    $trans = $order->getPayment()->addTransaction(Transaction::TYPE_CAPTURE, null, true);
+                    $trans->setIsClosed(0);
+                    $trans->setAdditionalInformation(Transaction::RAW_DETAILS, $captureTransaction);
+                    $trans->save();
+
+                    // Set Last Transaction ID
+                    $order->getPayment()->setLastTransId($captureTransaction['number'])->save();
+
+                    // Change order status
+                    $new_status = $method->getConfigData('order_status_capture');
+
+                    /** @var \Magento\Sales\Model\Order\Status $status */
+                    $status = $this->payexHelper->getAssignedState($new_status);
+                    $order->setData('state', $status->getState());
+                    $order->setStatus($status->getStatus());
+                    $order->save();
+
+                    $order->addStatusHistoryComment(__('Payment has been captured'));
+
+                    // Send order notification
                     $this->orderSender->send($order);
-                } catch (\Exception $e) {
-                    $this->logger->critical($e);
+
+                    // Create Invoice
+                    if ($order->canInvoice()) {
+                        $invoice = $this->payexHelper->makeInvoice(
+                            $order,
+                            [],
+                            false
+                        );
+                        $invoice->setTransactionId($captureTransaction['number']);
+                        $invoice->save();
+                    }
+                    $this->logger->info(sprintf('IPN: Order #%s marked as captured', $order_id));
                 }
 
-                // Create Invoice
-                $invoice = $this->payexHelper->makeInvoice(
-                    $order,
-                    [],
-                    false
-                );
-                $invoice->setTransactionId($captureTransaction['number']);
-                $invoice->save();
+                $order->save();
 
-                $this->logger->info(sprintf('IPN: Order #%s marked as captured', $order_id));
+                // Redirect to Success page
+                $this->checkoutHelper->getCheckout()->getQuote()->setIsActive(false)->save();
+                $this->_redirect('checkout/onepage/success');
+            } elseif ($transaction = $this->psp->filter($transactions, ['state' => 'Failed'])) {
+                // @todo Cancel Order ?
+                // @todo Extract failed reason
+                // Restore the quote
+                $this->checkoutHelper->getCheckout()->restoreQuote();
+                $this->_redirect('checkout');
+            } else {
+                // Pending?
+                // Redirect to Success page
+                $this->checkoutHelper->getCheckout()->getQuote()->setIsActive(false)->save();
+                $this->_redirect('checkout/onepage/success');
             }
-
-            $order->save();
-
-            // Redirect to Success page
-            $this->checkoutHelper->getCheckout()->getQuote()->setIsActive(false)->save();
-            $this->_redirect('checkout/onepage/success');
-        } elseif ($transaction = $this->psp->filter($transactions, ['state' => 'Failed'])) {
-            // @todo Cancel Order ?
-            // @todo Extract failed reason
-            // Restore the quote
-            $this->checkoutHelper->getCheckout()->restoreQuote();
-            $this->_redirect('checkout');
-        } else {
-            // Pending?
-            // Redirect to Success page
-            $this->checkoutHelper->getCheckout()->getQuote()->setIsActive(false)->save();
-            $this->_redirect('checkout/onepage/success');
+        } catch (\Exception $e) {
+            $this->logger->critical($e);
+        } finally {
+            $this->lockService->unlock($order_id);
         }
+
+        return $this->_response;
     }
 
     /**
