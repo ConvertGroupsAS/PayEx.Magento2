@@ -186,10 +186,18 @@ class Callback extends Action
                 throw new \Exception('Error: No payment ID');
             }
 
+            // Check Transaction is already registered
+            $trans = $this->payexTransaction->select([
+                'order_id' => $order_id,
+                'number'     => $data['transaction']['number']
+            ]);
+            if (!empty($trans)) {
+                throw new \Exception(sprintf('Action of Transaction #%s already performed', $data['transaction']['number']));
+            }
+
             // Fetch transactions list
             $response = $this->psp->request('GET', $payment_id . '/transactions');
             $transactions = $response['transactions']['transactionList'];
-
             // Import transactions
             $this->payexTransaction->import_transactions($transactions, $order_id);
 
@@ -204,16 +212,6 @@ class Callback extends Action
             if ($transaction['state'] !== 'Completed') {
                 $reason = isset($transaction['failedReason']) ? $transaction['failedReason'] : __('Transaction failed.');
                 throw new \Exception(sprintf('Error: Transaction state %s. Reason: %s', $transaction['state'], $reason));
-            }
-
-            // Check Transaction is already registered
-            $trans = $this->transactionRepository->getByTransactionId(
-                $transaction['number'],
-                $order->getPayment()->getId(),
-                $order->getId()
-            );
-            if ($trans) {
-                throw new \Exception(sprintf('Action of Transaction #%s already performed', $transaction['number']));
             }
 
             // Apply action
@@ -255,17 +253,23 @@ class Callback extends Action
                     $order->save();
 
                     // Send order notification
-                    try {
+                    if (!$order->getEmailSent()) {
                         $this->orderSender->send($order);
-                    } catch (\Exception $e) {
-                        $this->logger->critical($e);
                     }
 
                     $logger->info(sprintf('IPN: Order #%s marked as authorized', $order_id));
                     break;
                 case 'Capture':
-                    // Payment captured
-                    // Register Transaction
+                    //Check for existing AUTH transaction
+                    $authTransExists = $this->transactionRepository->getByTransactionType(
+                        Transaction::TYPE_AUTH,
+                        $order->getPayment()->getEntityId(),
+                        $order->getId()
+                    );
+                    if (!$authTransExists) {
+                        throw new \Exception("Can't register capture transaction before auth");
+                    }
+                    // Payment captured register Transaction
                     $order->getPayment()->setTransactionId($transaction['number']);
                     $trans = $order->getPayment()->addTransaction(Transaction::TYPE_CAPTURE, null, true);
                     $trans->setIsClosed(0);
@@ -285,13 +289,6 @@ class Callback extends Action
                     $order->save();
 
                     $order->addStatusHistoryComment(__('Payment has been captured'));
-
-                    // Send order notification
-                    try {
-                        $this->orderSender->send($order);
-                    } catch (\Exception $e) {
-                        $this->logger->critical($e);
-                    }
 
                     // Create Invoice
                     if ($order->canInvoice()) {
