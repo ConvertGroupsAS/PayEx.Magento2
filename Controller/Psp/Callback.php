@@ -187,10 +187,11 @@ class Callback extends Action
             }
 
             // Check Transaction is already registered
-            $trans = $this->payexTransaction->select([
-                'order_id' => $order_id,
-                'number'     => $data['transaction']['number']
-            ]);
+            $trans = $this->transactionRepository->getByTransactionId(
+                $data['transaction']['number'],
+                $order->getPayment()->getId(),
+                $order->getId()
+            );
             if (!empty($trans)) {
                 throw new \Exception(sprintf('Action of Transaction #%s already performed', $data['transaction']['number']));
             }
@@ -344,3 +345,4 @@ class Callback extends Action
         return $result;
     }
 }
+
