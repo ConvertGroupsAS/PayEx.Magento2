@@ -16,6 +16,11 @@ class Cc extends \PayEx\Payments\Model\Psp\AbstractPsp
     const METHOD_CODE = 'payex_psp_cc';
 
     /**
+     * Database lock timeout in seconds
+     */
+    const LOCK_TIMEOUT = 60;
+
+    /**
      * Payment code
      *
      * @var string
@@ -44,6 +49,66 @@ class Cc extends \PayEx\Payments\Model\Psp\AbstractPsp
     protected $_canVoid = true;
     protected $_canUseInternal = false;
     protected $_canFetchTransactionInfo = true;
+
+    /**
+     * @var \Magento\Framework\Lock\Backend\Database
+     */
+    protected $lockService;
+
+    /**
+     * @inheritDoc
+     */
+    public function __construct(
+        \Magento\Framework\App\RequestInterface $request,
+        \Magento\Framework\UrlInterface $urlBuilder,
+        \PayEx\Payments\Helper\Data $payexHelper,
+        \Magento\Store\Model\StoreManagerInterface $storeManager,
+        \Magento\Framework\Model\Context $context,
+        \Magento\Framework\Registry $registry,
+        \Magento\Framework\Api\ExtensionAttributesFactory $extensionFactory,
+        \Magento\Framework\Api\AttributeValueFactory $customAttributeFactory,
+        \Magento\Payment\Helper\Data $paymentData,
+        \Magento\Framework\App\Config\ScopeConfigInterface $scopeConfig,
+        \Magento\Payment\Model\Method\Logger $logger,
+        \Magento\Checkout\Helper\Data $checkoutHelper,
+        \Magento\Checkout\Model\Session $session,
+        \Magento\Customer\Model\Session $customerSession,
+        Transaction\Repository $transactionRepository,
+        \PayEx\Payments\Logger\Logger $payexLogger,
+        \PayEx\Payments\Helper\Psp $psp,
+        \PayEx\Payments\Model\PayexTransaction $payexTransaction,
+        \Magento\Framework\Lock\Backend\Database $lockService,
+        $resource = null,
+        $resourceCollection = null,
+        array $data = []
+    ) {
+        parent::__construct(
+            $request,
+            $urlBuilder,
+            $payexHelper,
+            $storeManager,
+            $context,
+            $registry,
+            $extensionFactory,
+            $customAttributeFactory,
+            $paymentData,
+            $scopeConfig,
+            $logger,
+            $checkoutHelper,
+            $session,
+            $customerSession,
+            $transactionRepository,
+            $payexLogger,
+            $psp,
+            $payexTransaction,
+            $resource,
+            $resourceCollection,
+            $data
+        );
+
+        $this->lockService = $lockService;
+    }
+
 
     /**
      * Method that will be executed instead of authorize or capture
@@ -189,6 +254,9 @@ class Cc extends \PayEx\Payments\Model\Psp\AbstractPsp
         $payment_id = $payment->getAdditionalInformation('payex_payment_id');
 
         try {
+
+            $this->lockService->lock($order->getId(), self::LOCK_TIMEOUT);
+
             $result = $this->psp->request('GET', $payment_id);
             $capture_href = $this->psp->get_operation($result['operations'], 'create-capture');
             if (empty($capture_href)) {
