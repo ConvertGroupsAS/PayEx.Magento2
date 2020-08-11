@@ -6,4 +6,7 @@
     <event name="checkout_cart_save_after">
         <observer name="payex_checkout_save" instance="PayEx\Payments\Observer\CheckoutCartSaveAfter" />
     </event>
+    <event name="sales_order_invoice_save_after">
+        <observer name="payex_sales_invoice_order_after_save" instance="PayEx\Payments\Observer\Sales\Invoice\OrderObserver" />
+    </event>
 </config>
