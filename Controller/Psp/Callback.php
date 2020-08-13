@@ -167,6 +167,7 @@ class Callback extends Action
             }
 
             // Load Order ID
+            /** @var \Magento\Sales\Model\Order $order */
             $order = $this->orderFactory->create()->loadByIncrementId($order_id);
             if (!$order->getId()) {
                 throw new \Exception(sprintf('Error: Failed to get order by ID %s', $order_id));

@@ -254,8 +254,7 @@ class Cc extends \PayEx\Payments\Model\Psp\AbstractPsp
         $payment_id = $payment->getAdditionalInformation('payex_payment_id');
 
         try {
-
-            $this->lockService->lock($order->getId(), self::LOCK_TIMEOUT);
+            $this->lockService->lock($order->getIncrementId(), self::LOCK_TIMEOUT);
 
             $result = $this->psp->request('GET', $payment_id);
             $capture_href = $this->psp->get_operation($result['operations'], 'create-capture');

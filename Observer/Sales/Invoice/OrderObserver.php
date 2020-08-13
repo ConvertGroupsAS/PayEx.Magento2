@@ -35,7 +35,7 @@ class OrderObserver implements \Magento\Framework\Event\ObserverInterface
         /** @var \Magento\Sales\Model\Order $order */
         $order = $invoice->getOrder();
 
-        $orderId = $order->getId();
+        $orderId = $order->getIncrementId();
         if ($this->lockService->isLocked($orderId)) {
             $this->lockService->unlock($orderId);
         }

@@ -635,6 +635,21 @@ class Data extends AbstractHelper
         $invoice->setRequestedCaptureCase($online ?
             \Magento\Sales\Model\Order\Invoice::CAPTURE_ONLINE : \Magento\Sales\Model\Order\Invoice::CAPTURE_OFFLINE);
 
+
+        // @todo GRZEGORZ DROZD remove after 1174 is fixed
+        $calledFrom = \debug_backtrace(\DEBUG_BACKTRACE_IGNORE_ARGS, 1)[0];
+        $this->logger->info(
+            \sprintf(
+                'Creating new invoice for order: %s, increment: %s. Total: %s, Called from: %s',
+                $order->getId(),
+                $order->getIncrementId(),
+                $invoice->getGrandTotal(),
+                $calledFrom['file'].'@'.$calledFrom['line']
+            ),
+            ['order'=>$order->toArray()]
+        );
+
+
         // Add Comment
         if (!empty($comment)) {
             $invoice->addComment(
