@@ -58,7 +58,7 @@ class PaymentInformationManagement
         \Magento\Checkout\Model\PaymentInformationManagement $subject,
         $cartId,
         \Magento\Quote\Api\Data\PaymentInterface $paymentMethod,
-        \Magento\Quote\Api\Data\AddressInterface $billingAddress
+        \Magento\Quote\Api\Data\AddressInterface $billingAddress = null
     ) {
     
         if ($paymentMethod->getMethod() === \PayEx\Payments\Model\Method\PartPayment::METHOD_CODE) {
@@ -88,7 +88,7 @@ class PaymentInformationManagement
         \Closure $proceed,
         $cartId,
         \Magento\Quote\Api\Data\PaymentInterface $paymentMethod,
-        \Magento\Quote\Api\Data\AddressInterface $billingAddress
+        \Magento\Quote\Api\Data\AddressInterface $billingAddress = null
     ) {
 
         /** @see \Magento\Checkout\Model\PaymentInformationManagement::savePaymentInformationAndPlaceOrder() */

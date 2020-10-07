@@ -60,7 +60,7 @@ class GuestPaymentInformationManagement
         $cartId,
         $email,
         \Magento\Quote\Api\Data\PaymentInterface $paymentMethod,
-        \Magento\Quote\Api\Data\AddressInterface $billingAddress
+        \Magento\Quote\Api\Data\AddressInterface $billingAddress = null
     ) {
     
         if ($paymentMethod->getMethod() === \PayEx\Payments\Model\Method\PartPayment::METHOD_CODE) {
@@ -92,7 +92,7 @@ class GuestPaymentInformationManagement
         $cartId,
         $email,
         \Magento\Quote\Api\Data\PaymentInterface $paymentMethod,
-        \Magento\Quote\Api\Data\AddressInterface $billingAddress
+        \Magento\Quote\Api\Data\AddressInterface $billingAddress = null
     ) {
 
         /** @see \Magento\Checkout\Model\GuestPaymentInformationManagement::savePaymentInformationAndPlaceOrder() */
