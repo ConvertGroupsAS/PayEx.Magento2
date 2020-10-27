@@ -3,11 +3,14 @@
 namespace PayEx\Payments\Controller\Psp;
 
 use Magento\Framework\App\Action\Action;
+use Magento\Framework\App\CsrfAwareActionInterface;
+use Magento\Framework\App\Request\InvalidRequestException;
+use Magento\Framework\App\RequestInterface;
 use Zend\Log\Logger;
 use Zend\Log\Writer\Stream;
 use Magento\Sales\Model\Order\Payment\Transaction;
 
-class Callback extends Action
+class Callback extends Action implements CsrfAwareActionInterface
 {
     /**
      * Database lock timeout in seconds
@@ -345,5 +348,23 @@ class Callback extends Action
 
         return $result;
     }
-}
 
+    /**
+     * @inheritDoc
+     */
+    public function createCsrfValidationException(
+        RequestInterface $request
+    ): ?InvalidRequestException {
+        return null;
+    }
+
+    /**
+     * Disable Magento's CSRF validation.
+     *
+     * @inheritDoc
+     */
+    public function validateForCsrf(RequestInterface $request): ?bool
+    {
+        return true;
+    }
+}
