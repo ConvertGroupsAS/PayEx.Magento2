@@ -19,6 +19,8 @@ class Data extends AbstractHelper
 {
     const MODULE_NAME = 'PayEx_Payments';
 
+    const METHOD_PREFIX = 'payex';
+
     /**
      * @var \Psr\Log\LoggerInterface
      */
@@ -410,14 +412,14 @@ class Data extends AbstractHelper
     public function getOrderItems(\Magento\Sales\Model\Order $order, $currency = '', $strict_vat_rate = false)
     {
         //if (empty($currency)) {
-            //$currency = $order->getBaseCurrencyCode();
+        //$currency = $order->getBaseCurrencyCode();
         //}
 
         // Currency rate
         $currencyRate = 1;
         //if ($order->getBaseCurrencyCode() != $currency) {
-            // @todo Currency rate calc
-            //$currencyRate = $order->getBaseToOrderRate();
+        // @todo Currency rate calc
+        //$currencyRate = $order->getBaseToOrderRate();
         //}
 
         $lines = [];
@@ -1052,7 +1054,7 @@ class Data extends AbstractHelper
             $order->setBaseTotalCanceled($order->getBaseGrandTotal() - $order->getBaseTotalPaid());
 
             $order->setState($state)
-                 ->setStatus($this->orderConfig->getStateDefaultStatus($state));
+                ->setStatus($this->orderConfig->getStateDefaultStatus($state));
             if (!empty($comment)) {
                 $order->addStatusHistoryComment($comment, false);
             }
@@ -1098,18 +1100,27 @@ class Data extends AbstractHelper
      */
     public function getMsisdn($phone, $countryCode)
     {
-	    switch ($countryCode) {
-		    case 'SE':
-			    $msisdn = '+46' . $phone;
-			    break;
-		    case 'NO':
-			    $msisdn = '+47' . $phone;
-			    break;
-		    default:
-			    $msisdn = '+' . $phone;
-			    break;
-	    }
+        switch ($countryCode) {
+            case 'SE':
+                $msisdn = '+46' . $phone;
+                break;
+            case 'NO':
+                $msisdn = '+47' . $phone;
+                break;
+            default:
+                $msisdn = '+' . $phone;
+                break;
+        }
 
-	    return $msisdn;
+        return $msisdn;
+    }
+
+    /**
+     * @param $method
+     * @return bool
+     */
+    public static function isPayexMethod($method)
+    {
+        return strpos($method, self::METHOD_PREFIX) !== false;
     }
 }

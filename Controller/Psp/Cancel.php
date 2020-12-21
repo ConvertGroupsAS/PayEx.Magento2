@@ -65,13 +65,16 @@ class Cancel extends Action
     {
         $message = __('Order canceled by user');
         $order = $this->getOrder();
-        if ($order->getId()) {
-            $this->payexHelper->cancelOrder($order, $message);
+        if ($order->getId() && $this->payexHelper->isPayexMethod($order->getPayment()->getMethod())
+            && $this->canCancel($order)
+        ) {
+            $order->cancel();
+            $order->addCommentToStatusHistory($message);
+            $order->save();
+            // Restore the quote
+            $this->checkoutHelper->getCheckout()->restoreQuote();
         }
-
-        // Restore the quote
-        $this->checkoutHelper->getCheckout()->restoreQuote();
-        $this->_redirect('checkout');
+        return $this->_redirect('checkout');
     }
 
     /**
@@ -82,5 +85,17 @@ class Cancel extends Action
     {
         $incrementId = $this->checkoutHelper->getCheckout()->getLastRealOrderId();
         return $this->orderFactory->create()->loadByIncrementId($incrementId);
+    }
+
+    /**
+     * Get order object
+     * @param \Magento\Sales\Model\Order $order
+     */
+    protected function canCancel(\Magento\Sales\Model\Order $order)
+    {
+        return in_array($order->getState(), [
+            \Magento\Sales\Model\Order::STATE_NEW,
+            \Magento\Sales\Model\Order::STATE_PENDING_PAYMENT,
+        ]);
     }
 }
