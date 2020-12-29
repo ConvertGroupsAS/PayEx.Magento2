@@ -6,9 +6,9 @@ use Magento\Framework\App\Action\Action;
 use Magento\Framework\App\CsrfAwareActionInterface;
 use Magento\Framework\App\Request\InvalidRequestException;
 use Magento\Framework\App\RequestInterface;
+use Magento\Sales\Model\Order\Payment\Transaction;
 use Zend\Log\Logger;
 use Zend\Log\Writer\Stream;
-use Magento\Sales\Model\Order\Payment\Transaction;
 
 class Callback extends Action implements CsrfAwareActionInterface
 {
@@ -106,7 +106,6 @@ class Callback extends Action implements CsrfAwareActionInterface
         \Magento\Sales\Model\OrderFactory $orderFactory,
         \Magento\Framework\Lock\Backend\Database $lockService
     ) {
-
         parent::__construct($context);
 
         $this->rawResultFactory      = $rawResultFactory;
@@ -174,6 +173,9 @@ class Callback extends Action implements CsrfAwareActionInterface
             $order = $this->orderFactory->create()->loadByIncrementId($order_id);
             if (!$order->getId()) {
                 throw new \Exception(sprintf('Error: Failed to get order by ID %s', $order_id));
+            }
+            if ($order->isCanceled()) {
+                throw new \Exception('Order is cancelled');
             }
 
             /** @var \Magento\Payment\Model\Method\AbstractMethod $method */
